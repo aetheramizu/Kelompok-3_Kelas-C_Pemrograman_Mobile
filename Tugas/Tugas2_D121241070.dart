@@ -47,7 +47,6 @@ void prosesPembayaran(List<Map<String, dynamic>> keranjang) {
 double hitungDiskon(double totalBelanja) {
   double nilaiDiskon = 0;
 
-  // Menggunakan if / else if / else dan operator comparison
   // Ketentuan diskon disesuaikan untuk rentang harga barang elektronik:
   
   if (totalBelanja >= 4000000) {
