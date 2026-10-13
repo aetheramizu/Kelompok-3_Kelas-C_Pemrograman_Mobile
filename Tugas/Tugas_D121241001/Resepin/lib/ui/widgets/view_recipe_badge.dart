@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 /// Label kecil "Lihat resep" yang ditempatkan di sudut gambar kartu,
 /// sebagai penanda bahwa kartu dapat diketuk. Ukurannya sengaja mungil

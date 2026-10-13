@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/meal.dart';
-import '../services/meal_api.dart';
-import '../theme/app_theme.dart';
+import '../../models/meal.dart';
+import '../../services/meal_api.dart';
+import '../../theme/app_theme.dart';
 import '../widgets/error_block.dart';
 import '../widgets/search_result_tile.dart';
 import '../widgets/skeleton.dart';

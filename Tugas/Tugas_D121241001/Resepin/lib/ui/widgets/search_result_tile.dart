@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/meal.dart';
-import '../theme/app_theme.dart';
+import '../../models/meal.dart';
+import '../../theme/app_theme.dart';
 import 'meal_image.dart';
 
 /// Satu baris hasil pencarian: thumbnail persegi 72 dp, nama resep, dan

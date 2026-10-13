@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../models/meal.dart';
-import '../models/meal_category.dart';
-import '../services/meal_api.dart';
-import '../theme/app_theme.dart';
+import '../../models/meal.dart';
+import '../../models/meal_category.dart';
+import '../../services/meal_api.dart';
+import '../../theme/app_theme.dart';
 import '../widgets/category_chips.dart';
 import '../widgets/error_block.dart';
 import '../widgets/random_recipe_card.dart';

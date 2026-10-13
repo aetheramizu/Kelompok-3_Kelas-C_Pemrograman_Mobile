@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:resepin/models/meal_category.dart';
 import 'package:resepin/theme/app_theme.dart';
-import 'package:resepin/widgets/category_chips.dart';
+import 'package:resepin/ui/widgets/category_chips.dart';
 
 void main() {
   testWidgets('menampilkan chip, indikator gulir, dan memanggil onSelected', (

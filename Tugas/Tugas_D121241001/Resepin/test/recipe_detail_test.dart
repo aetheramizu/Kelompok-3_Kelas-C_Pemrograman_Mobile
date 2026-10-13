@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:resepin/models/meal.dart';
-import 'package:resepin/screens/recipe_detail_screen.dart';
+import 'package:resepin/ui/screens/recipe_detail_screen.dart';
 import 'package:resepin/theme/app_theme.dart';
-import 'package:resepin/widgets/skeleton.dart';
+import 'package:resepin/ui/widgets/skeleton.dart';
 
 void main() {
   // Konten detail lebih panjang dari viewport test default (800x600);

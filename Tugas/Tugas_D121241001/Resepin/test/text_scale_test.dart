@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:resepin/models/meal.dart';
-import 'package:resepin/screens/recipe_detail_screen.dart';
+import 'package:resepin/ui/screens/recipe_detail_screen.dart';
 import 'package:resepin/theme/app_theme.dart';
-import 'package:resepin/widgets/recipe_grid.dart';
+import 'package:resepin/ui/widgets/recipe_grid.dart';
 
 /// Audit Fase 5: layout tidak boleh overflow pada skala teks besar
 /// (aksesibilitas). Error overflow direkam test framework sebagai

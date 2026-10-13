@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 /// Gambar resep dari TheMealDB dengan placeholder loading, fallback gagal
 /// muat, dan retry sungguhan (request ulang), tanpa dependensi tambahan.

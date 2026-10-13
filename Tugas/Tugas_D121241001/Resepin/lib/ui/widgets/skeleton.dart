@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 /// Blok skeleton polos tanpa animasi maupun dependensi tambahan. Proporsinya
 /// harus mengikuti konten yang direpresentasikan agar layout tidak bergeser

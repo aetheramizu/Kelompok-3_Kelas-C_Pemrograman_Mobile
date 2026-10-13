@@ -1,8 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../models/meal_category.dart';
-import '../theme/app_theme.dart';
+import '../../models/meal_category.dart';
+import '../../theme/app_theme.dart';
 
 /// Baris chip kategori yang digeser horizontal. Chip aktif terisi hijau
 /// utama dengan teks putih; lainnya outline. Semua target sentuh minimal

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:resepin/models/meal.dart';
 import 'package:resepin/theme/app_theme.dart';
-import 'package:resepin/widgets/recipe_grid.dart';
+import 'package:resepin/ui/widgets/recipe_grid.dart';
 
 Meal _meal(String id, String name) =>
     Meal.fromJson({'idMeal': id, 'strMeal': name})!;

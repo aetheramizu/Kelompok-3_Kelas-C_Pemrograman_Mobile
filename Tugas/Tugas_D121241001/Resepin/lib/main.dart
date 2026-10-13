@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/main_shell.dart';
+import 'ui/screens/main_shell.dart';
 import 'theme/app_theme.dart';
 
 void main() {

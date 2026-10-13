@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 /// Blok pesan error inline dengan tombol retry. Dipakai bersama oleh
 /// Beranda, Cari, dan Detail. liveRegion membuat pesan terumumkan ke
