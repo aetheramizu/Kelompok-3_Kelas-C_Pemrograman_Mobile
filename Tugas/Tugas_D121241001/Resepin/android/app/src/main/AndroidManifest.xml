@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Diperlukan untuk mengakses TheMealDB REST API, termasuk pada build release. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="resepin"
         android:name="${applicationName}"
