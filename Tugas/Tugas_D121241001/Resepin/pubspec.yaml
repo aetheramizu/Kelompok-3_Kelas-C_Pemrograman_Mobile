@@ -1,5 +1,5 @@
 name: resepin
-description: "A new Flutter project."
+description: "Resepin — aplikasi penemuan resep berbasis TheMealDB API."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -35,6 +35,9 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # HTTP client untuk TheMealDB REST API.
+  http: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,6 +59,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Font judul editorial (variable, weight via FontWeight). Lisensi:
+  # assets/fonts/fraunces/OFL.txt (SIL Open Font License 1.1).
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/fraunces/Fraunces-Variable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
