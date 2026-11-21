@@ -207,7 +207,7 @@ Keep failure handling simple and consistent with existing `ViewLoadState`:
 ### 3.6 Leaderboard Queries & Privacy Controls
 
 - **Current status:** Local/mock preview (`NearPaceMockData.initialLeaderboard()` + in-memory append of current user when `profile.showOnLeaderboard == true`). Note: Marked **optional** in `docs/requirements-matrix.md` and `docs/mvp-specification.md`, though the UI and `firestore.rules` already exist.
-- **Relevant files:** `lib/domain/leaderboard_entry.dart`, `lib/state/nearpace_controller.dart:92-100, 159-201, 284-288, 308-336`, `lib/ui/screens/leaderboard_screen.dart`, `lib/ui/screens/profile_screen.dart:236-258`, `firestore.rules:29-50`.
+- **Relevant files:** `lib/domain/leaderboard_entry.dart`, `lib/state/nearpace_controller.dart:92-100, 159-201, 284-288, 308-336`, `lib/ui/screens/leaderboard_screen.dart`, `lib/ui/screens/profile_screen.dart:236-258`, `firestore.rules:33-55`.
 - **Existing models:** `LeaderboardEntry` (`uid`, `displayName`, `city`, `weekKey`, `distanceM`, `runCount`, `updatedAt`, `documentId => '${weekKey}_$uid'`).
 - **UI entry points:**
   - `LeaderboardScreen`: Opt-in banner (`Opt in` button when private), city filter chips (`All cities` + dynamic city chips), ranked list, loading/empty/error states.
@@ -366,12 +366,12 @@ abstract interface class PushNotificationService {
 
 The backend developer **must resolve these before deploying Firestore writes**:
 
-1. **Defect in `firestore.rules` (`users/{uid}/activities/{activityId}`, lines 21–26):**
+1. **Defect in `firestore.rules` (`users/{uid}/activities/{activityId}`, lines 21–28):**
    - Current rule uses `allow read, write: if isOwner(uid) && (!request.resource.data.keys()...)`.
    - In Firestore Security Rules, `request.resource` is `null` on `read` and `delete` operations, causing `request.resource.data` evaluation to fail and **deny every activity read and delete**.
    - **Proposed fix:** Split into `allow read, delete: if isOwner(uid);` and `allow create, update: if isOwner(uid) && request.resource.data.distanceM is number && request.resource.data.distanceM >= 0 && request.resource.data.durationS is number && request.resource.data.durationS >= 0;`.
 2. **Timestamp vs. ISO-8601 String mismatch across models and rules:**
-   - `LeaderboardEntry.toMap()` (`lib/domain/leaderboard_entry.dart:44`) writes `'updatedAt': updatedAt.toUtc().toIso8601String()` (a `String`), while `firestore.rules:46` enforces `request.resource.data.updatedAt is timestamp`. Writing `LeaderboardEntry.toMap()` directly to Firestore will be **rejected**.
+   - `LeaderboardEntry.toMap()` (`lib/domain/leaderboard_entry.dart:44`) writes `'updatedAt': updatedAt.toUtc().toIso8601String()` (a `String`), while `firestore.rules:52` enforces `request.resource.data.updatedAt is timestamp`. Writing `LeaderboardEntry.toMap()` directly to Firestore will be **rejected**.
    - `Activity.toMap()` / `Activity.fromMap()` (`lib/domain/activity.dart:43-67`) and `WeatherSnapshot` (`lib/domain/weather.dart:33-50`) also assume ISO-8601 strings, whereas `docs/mvp-specification.md` specifies Firestore `timestamp` fields (`startedAt`, `endedAt`, `createdAt`).
    - **Recommendation:** Keep `lib/domain/` free of `cloud_firestore` imports, and handle `Timestamp <-> DateTime` conversion inside the Firestore repository mappers (or accept both `Timestamp` and ISO `String` in mapper helpers).
 3. **Missing `createdAt` on `UserProfile`:**
