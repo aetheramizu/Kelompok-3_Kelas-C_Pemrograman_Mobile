@@ -362,12 +362,19 @@ class _TopRunnersStrip extends StatelessWidget {
                     style: textTheme.titleSmall,
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    NearPaceFormatters.distanceKm(entry.distanceM, decimals: 1),
-                    style: textTheme.titleSmall?.copyWith(
-                      color: isFirst ? colors.accentText : colors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      NearPaceFormatters.distanceKm(
+                        entry.distanceM,
+                        decimals: 1,
+                      ),
+                      maxLines: 1,
+                      style: textTheme.titleSmall?.copyWith(
+                        color: isFirst ? colors.accentText : colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                   Text(

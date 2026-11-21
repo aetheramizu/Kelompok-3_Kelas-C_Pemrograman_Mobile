@@ -158,6 +158,7 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       // Greeting row + avatar shortcut to Profile.
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
                             child: Column(
@@ -181,18 +182,7 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: NearPaceSpacing.xs),
-                          StatusPill(
-                            label: statusLabel,
-                            icon: statusIcon,
-                            foregroundColor: statusFg,
-                            backgroundColor: statusBg,
-                            onTap: () => _showBackendStatusSheet(
-                              context,
-                              controller.firebaseStatus,
-                            ),
-                          ),
-                          const SizedBox(width: NearPaceSpacing.xs),
+                          const SizedBox(width: NearPaceSpacing.sm),
                           Semantics(
                             button: true,
                             label: 'Open profile',
@@ -200,8 +190,8 @@ class HomeScreen extends StatelessWidget {
                               onTap: () => controller.setTabIndex(3),
                               customBorder: const CircleBorder(),
                               child: Container(
-                                width: 44,
-                                height: 44,
+                                width: NearPaceSpacing.minTapTarget,
+                                height: NearPaceSpacing.minTapTarget,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: colors.deepGreenSurface,
@@ -223,6 +213,20 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: NearPaceSpacing.xs),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: StatusPill(
+                          label: statusLabel,
+                          icon: statusIcon,
+                          foregroundColor: statusFg,
+                          backgroundColor: statusBg,
+                          onTap: () => _showBackendStatusSheet(
+                            context,
+                            controller.firebaseStatus,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: NearPaceSpacing.lg),
 

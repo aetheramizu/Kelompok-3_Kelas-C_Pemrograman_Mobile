@@ -386,8 +386,8 @@ class _IdleBody extends StatelessWidget {
               ),
               const SizedBox(height: NearPaceSpacing.xs),
               Text(
-                'Configure local preview behavior to test live GPS updates and '
-                'weather fallback states without outdoor hardware.',
+                'Local preview options for testing GPS tracking and offline '
+                'weather states.',
                 style: textTheme.bodySmall?.copyWith(
                   color: colors.textSecondary,
                 ),

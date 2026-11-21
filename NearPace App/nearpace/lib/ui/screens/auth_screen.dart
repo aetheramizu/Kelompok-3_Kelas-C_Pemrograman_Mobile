@@ -82,8 +82,8 @@ class _AuthScreenState extends State<AuthScreen> {
     ) = switch (controller.firebaseStatus) {
       FirebaseReady() => (
         'Firebase ready',
-        'Firebase Core initialized from build-time configuration. UI '
-            'preview uses local state until auth services are connected.',
+        'Firebase Core is initialized. Forms currently run in local '
+            'preview until auth services are wired.',
         colors.performanceGreen,
         colors.deepGreenSurface,
       ),

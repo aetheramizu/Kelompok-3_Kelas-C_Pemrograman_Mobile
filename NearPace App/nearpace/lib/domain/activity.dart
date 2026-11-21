@@ -30,25 +30,25 @@ class Activity {
   bool get hasRoute => route.length >= 2;
 
   Activity copyWith({String? id, WeatherSnapshot? weather}) => Activity(
-        id: id ?? this.id,
-        startedAt: startedAt,
-        endedAt: endedAt,
-        distanceM: distanceM,
-        durationS: durationS,
-        avgPaceSecPerKm: avgPaceSecPerKm,
-        route: route,
-        weather: weather ?? this.weather,
-      );
+    id: id ?? this.id,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    distanceM: distanceM,
+    durationS: durationS,
+    avgPaceSecPerKm: avgPaceSecPerKm,
+    route: route,
+    weather: weather ?? this.weather,
+  );
 
   Map<String, dynamic> toMap() => {
-        'startedAt': startedAt.toUtc().toIso8601String(),
-        'endedAt': endedAt.toUtc().toIso8601String(),
-        'distanceM': distanceM,
-        'durationS': durationS,
-        'avgPaceSecPerKm': avgPaceSecPerKm,
-        'route': route.map((point) => point.toMap()).toList(),
-        if (weather != null) 'weather': weather!.toMap(),
-      };
+    'startedAt': startedAt.toUtc().toIso8601String(),
+    'endedAt': endedAt.toUtc().toIso8601String(),
+    'distanceM': distanceM,
+    'durationS': durationS,
+    'avgPaceSecPerKm': avgPaceSecPerKm,
+    'route': route.map((point) => point.toMap()).toList(),
+    if (weather != null) 'weather': weather!.toMap(),
+  };
 
   static Activity fromMap(String id, Map<String, dynamic> map) {
     final rawRoute = (map['route'] as List<dynamic>? ?? const []);

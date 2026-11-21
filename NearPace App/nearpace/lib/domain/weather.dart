@@ -31,11 +31,11 @@ class WeatherSnapshot {
   String get label => weatherCodeLabel(code);
 
   Map<String, dynamic> toMap() => {
-        'temperatureC': temperatureC,
-        'apparentC': apparentC,
-        'code': code,
-        'fetchedAt': fetchedAt.toUtc().toIso8601String(),
-      };
+    'temperatureC': temperatureC,
+    'apparentC': apparentC,
+    'code': code,
+    'fetchedAt': fetchedAt.toUtc().toIso8601String(),
+  };
 
   static WeatherSnapshot? fromMap(Map<String, dynamic>? map) {
     if (map == null) return null;

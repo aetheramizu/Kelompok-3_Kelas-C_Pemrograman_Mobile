@@ -31,25 +31,25 @@ class UserProfile {
     String? city,
     bool? showOnLeaderboard,
     String? fcmToken,
-  }) =>
-      UserProfile(
-        uid: uid,
-        email: email,
-        displayName: displayName ?? this.displayName,
-        city: city ?? this.city,
-        showOnLeaderboard: showOnLeaderboard ?? this.showOnLeaderboard,
-        fcmToken: fcmToken ?? this.fcmToken,
-      );
+  }) => UserProfile(
+    uid: uid,
+    email: email,
+    displayName: displayName ?? this.displayName,
+    city: city ?? this.city,
+    showOnLeaderboard: showOnLeaderboard ?? this.showOnLeaderboard,
+    fcmToken: fcmToken ?? this.fcmToken,
+  );
 
   Map<String, dynamic> toMap() => {
-        'email': email,
-        'displayName': displayName,
-        'city': city,
-        'showOnLeaderboard': showOnLeaderboard,
-        if (fcmToken != null) 'fcmToken': fcmToken,
-      };
+    'email': email,
+    'displayName': displayName,
+    'city': city,
+    'showOnLeaderboard': showOnLeaderboard,
+    if (fcmToken != null) 'fcmToken': fcmToken,
+  };
 
-  static UserProfile fromMap(String uid, Map<String, dynamic> map) => UserProfile(
+  static UserProfile fromMap(String uid, Map<String, dynamic> map) =>
+      UserProfile(
         uid: uid,
         email: map['email'] as String? ?? '',
         displayName: map['displayName'] as String? ?? 'Runner',

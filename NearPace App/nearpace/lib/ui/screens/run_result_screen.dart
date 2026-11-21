@@ -229,66 +229,82 @@ class RunResultScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: NearPaceSpacing.lg),
 
-                            // Primary Metrics Grid (Distance, Duration, Pace, Window).
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              mainAxisSpacing: NearPaceSpacing.sm,
-                              crossAxisSpacing: NearPaceSpacing.sm,
-                              childAspectRatio: 1.55,
-                              children: [
-                                NearPaceCard(
-                                  padding: const EdgeInsets.all(
-                                    NearPaceSpacing.md,
-                                  ),
-                                  child: MetricTile(
-                                    label: 'Distance',
-                                    value: NearPaceFormatters.distanceKmValue(
-                                      activity.distanceM,
+                            // Primary Metrics Grid (scales cleanly at large font sizes).
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: NearPaceCard(
+                                      padding: const EdgeInsets.all(
+                                        NearPaceSpacing.md,
+                                      ),
+                                      child: MetricTile(
+                                        label: 'Distance',
+                                        value:
+                                            NearPaceFormatters.distanceKmValue(
+                                              activity.distanceM,
+                                            ),
+                                        unit: 'km',
+                                        icon: Icons.straighten_rounded,
+                                        highlight: true,
+                                      ),
                                     ),
-                                    unit: 'km',
-                                    icon: Icons.straighten_rounded,
-                                    highlight: true,
                                   ),
-                                ),
-                                NearPaceCard(
-                                  padding: const EdgeInsets.all(
-                                    NearPaceSpacing.md,
-                                  ),
-                                  child: MetricTile(
-                                    label: 'Duration',
-                                    value: NearPaceFormatters.durationClock(
-                                      activity.duration,
+                                  const SizedBox(width: NearPaceSpacing.sm),
+                                  Expanded(
+                                    child: NearPaceCard(
+                                      padding: const EdgeInsets.all(
+                                        NearPaceSpacing.md,
+                                      ),
+                                      child: MetricTile(
+                                        label: 'Duration',
+                                        value: NearPaceFormatters.durationClock(
+                                          activity.duration,
+                                        ),
+                                        icon: Icons.timer_outlined,
+                                      ),
                                     ),
-                                    icon: Icons.timer_outlined,
                                   ),
-                                ),
-                                NearPaceCard(
-                                  padding: const EdgeInsets.all(
-                                    NearPaceSpacing.md,
-                                  ),
-                                  child: MetricTile(
-                                    label: 'Avg pace',
-                                    value: NearPaceFormatters.paceValue(
-                                      activity.avgPaceSecPerKm,
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: NearPaceSpacing.sm),
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: NearPaceCard(
+                                      padding: const EdgeInsets.all(
+                                        NearPaceSpacing.md,
+                                      ),
+                                      child: MetricTile(
+                                        label: 'Avg pace',
+                                        value: NearPaceFormatters.paceValue(
+                                          activity.avgPaceSecPerKm,
+                                        ),
+                                        unit: '/km',
+                                        icon: Icons.speed_rounded,
+                                      ),
                                     ),
-                                    unit: '/km',
-                                    icon: Icons.speed_rounded,
                                   ),
-                                ),
-                                NearPaceCard(
-                                  padding: const EdgeInsets.all(
-                                    NearPaceSpacing.md,
+                                  const SizedBox(width: NearPaceSpacing.sm),
+                                  Expanded(
+                                    child: NearPaceCard(
+                                      padding: const EdgeInsets.all(
+                                        NearPaceSpacing.md,
+                                      ),
+                                      child: MetricTile(
+                                        label: 'GPS points',
+                                        value: '${activity.route.length}',
+                                        unit: 'pts',
+                                        icon: Icons.gps_fixed_rounded,
+                                      ),
+                                    ),
                                   ),
-                                  child: MetricTile(
-                                    label: 'GPS points',
-                                    value: '${activity.route.length}',
-                                    unit: 'pts',
-                                    icon: Icons.gps_fixed_rounded,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
 
                             if (activity.avgPaceSecPerKm == null) ...[
