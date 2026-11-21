@@ -33,6 +33,7 @@ class LeaderboardScreen extends StatelessWidget {
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
             child: CustomScrollView(
+              key: const ValueKey('leaderboard-scroll'),
               slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(

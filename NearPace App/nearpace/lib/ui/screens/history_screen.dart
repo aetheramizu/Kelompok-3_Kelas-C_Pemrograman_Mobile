@@ -73,6 +73,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
             child: CustomScrollView(
+              key: const ValueKey('history-scroll'),
               slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(

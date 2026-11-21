@@ -117,6 +117,7 @@ class ProfileScreen extends StatelessWidget {
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
             child: CustomScrollView(
+              key: const ValueKey('profile-scroll'),
               slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(
@@ -274,26 +275,23 @@ class ProfileScreen extends StatelessWidget {
                                 segments: const [
                                   ButtonSegment(
                                     value: ThemeMode.dark,
-                                    label: Text('Dark'),
-                                    icon: Icon(
-                                      Icons.dark_mode_outlined,
-                                      size: 16,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text('Dark', maxLines: 1),
                                     ),
                                   ),
                                   ButtonSegment(
                                     value: ThemeMode.light,
-                                    label: Text('Light'),
-                                    icon: Icon(
-                                      Icons.light_mode_outlined,
-                                      size: 16,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text('Light', maxLines: 1),
                                     ),
                                   ),
                                   ButtonSegment(
                                     value: ThemeMode.system,
-                                    label: Text('System'),
-                                    icon: Icon(
-                                      Icons.brightness_auto_outlined,
-                                      size: 16,
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text('System', maxLines: 1),
                                     ),
                                   ),
                                 ],

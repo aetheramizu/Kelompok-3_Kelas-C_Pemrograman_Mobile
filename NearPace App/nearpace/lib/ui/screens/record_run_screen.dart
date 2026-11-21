@@ -381,7 +381,12 @@ class _IdleBody extends StatelessWidget {
                     color: colors.textSecondary,
                   ),
                   const SizedBox(width: NearPaceSpacing.xs),
-                  Text('Preview session options', style: textTheme.titleSmall),
+                  Expanded(
+                    child: Text(
+                      'Preview session options',
+                      style: textTheme.titleSmall,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: NearPaceSpacing.xs),
@@ -525,10 +530,14 @@ class _ActiveBody extends StatelessWidget {
         Semantics(
           liveRegion: true,
           label: 'Elapsed time ${NearPaceFormatters.durationClock(elapsed)}',
-          child: Text(
-            NearPaceFormatters.durationClock(elapsed),
-            style: textTheme.displayLarge?.copyWith(
-              color: paused ? colors.textSecondary : colors.textPrimary,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              NearPaceFormatters.durationClock(elapsed),
+              maxLines: 1,
+              style: textTheme.displayLarge?.copyWith(
+                color: paused ? colors.textSecondary : colors.textPrimary,
+              ),
             ),
           ),
         ),
@@ -836,11 +845,18 @@ class _CircularControlButton extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.textSecondary,
-              fontWeight: FontWeight.w600,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],

@@ -180,10 +180,13 @@ class WeatherSummaryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                '${snapshot.temperatureC.toStringAsFixed(1)}°C',
-                style: textTheme.headlineMedium?.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              Flexible(
+                flex: 0,
+                child: Text(
+                  '${snapshot.temperatureC.toStringAsFixed(1)}°C',
+                  style: textTheme.headlineMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ],

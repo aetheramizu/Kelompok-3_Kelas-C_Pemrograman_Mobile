@@ -146,6 +146,7 @@ class HomeScreen extends StatelessWidget {
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
             child: CustomScrollView(
+              key: const ValueKey('home-scroll'),
               slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(
@@ -228,7 +229,7 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: NearPaceSpacing.lg),
+                      const SizedBox(height: NearPaceSpacing.md),
 
                       // This Week Summary Card.
                       NearPaceCard(
@@ -273,26 +274,30 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: NearPaceSpacing.md),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                Text(
-                                  NearPaceFormatters.distanceKmValue(
-                                    controller.weeklyDistanceMeters,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Text(
+                                    NearPaceFormatters.distanceKmValue(
+                                      controller.weeklyDistanceMeters,
+                                    ),
+                                    style: textTheme.displayMedium?.copyWith(
+                                      color: colors.textPrimary,
+                                    ),
                                   ),
-                                  style: textTheme.displayMedium?.copyWith(
-                                    color: colors.textPrimary,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'km',
+                                    style: textTheme.titleMedium?.copyWith(
+                                      color: colors.accentText,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'km',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: colors.accentText,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             const SizedBox(height: NearPaceSpacing.md),
                             WeeklyDistanceChart(
