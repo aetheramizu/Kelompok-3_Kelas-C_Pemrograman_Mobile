@@ -23,20 +23,21 @@ class GeoPointLite {
     final lat2 = other.latitude * math.pi / 180;
     final dLat = lat2 - lat1;
     final dLon = (other.longitude - longitude) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1) * math.cos(lat2) * math.sin(dLon / 2) * math.sin(dLon / 2);
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1) *
+            math.cos(lat2) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
     return 2 * _earthRadiusM * math.asin(math.min(1, math.sqrt(a)));
   }
 
-  Map<String, dynamic> toMap() => {
-        'lat': latitude,
-        'lng': longitude,
-      };
+  Map<String, dynamic> toMap() => {'lat': latitude, 'lng': longitude};
 
   static GeoPointLite fromMap(Map<String, dynamic> map) => GeoPointLite(
-        latitude: (map['lat'] as num).toDouble(),
-        longitude: (map['lng'] as num).toDouble(),
-      );
+    latitude: (map['lat'] as num).toDouble(),
+    longitude: (map['lng'] as num).toDouble(),
+  );
 
   @override
   String toString() =>
