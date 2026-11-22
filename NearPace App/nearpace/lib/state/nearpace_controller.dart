@@ -172,6 +172,7 @@ class NearPaceController extends ChangeNotifier {
         if (uid != null && uid.isNotEmpty) {
           _isSignedIn = true;
           _subscribeToUserData(uid);
+          _subscribeToLeaderboard();
         } else {
           _unsubscribeUserData();
           _isSignedIn = false;
@@ -181,25 +182,7 @@ class NearPaceController extends ChangeNotifier {
     }
 
     // Listen to weekly leaderboard query.
-    final lbRepo = leaderboardRepository;
-    if (lbRepo != null) {
-      _leaderboardSubscription = lbRepo
-          .watchWeeklyLeaderboard(currentWeekKey)
-          .listen(
-            (entries) {
-              _leaderboardBase.clear();
-              _leaderboardBase.addAll(entries);
-              _leaderboardState = ViewLoadState.ready;
-              _leaderboardError = null;
-              notifyListeners();
-            },
-            onError: (error) {
-              _leaderboardState = ViewLoadState.error;
-              _leaderboardError = error.toString();
-              notifyListeners();
-            },
-          );
-    }
+    _subscribeToLeaderboard();
 
     // Listen to push messages.
     final push = pushService;
@@ -267,6 +250,34 @@ class NearPaceController extends ChangeNotifier {
     _profileSubscription = null;
     _activitiesSubscription?.cancel();
     _activitiesSubscription = null;
+  }
+
+  void _subscribeToLeaderboard() {
+    final lbRepo = leaderboardRepository;
+    if (lbRepo == null) return;
+
+    _leaderboardSubscription?.cancel();
+    _leaderboardSubscription = lbRepo
+        .watchWeeklyLeaderboard(currentWeekKey)
+        .listen(
+          (entries) {
+            _leaderboardBase.clear();
+            _leaderboardBase.addAll(entries);
+            _leaderboardState = ViewLoadState.ready;
+            _leaderboardError = null;
+            notifyListeners();
+          },
+          onError: (error) {
+            _leaderboardState = ViewLoadState.error;
+            _leaderboardError = error.toString();
+            notifyListeners();
+          },
+        );
+  }
+
+  Future<void> refreshLeaderboard() async {
+    _subscribeToLeaderboard();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
   }
 
   // --- Derived Weekly Metrics ---
@@ -603,8 +614,20 @@ class NearPaceController extends ChangeNotifier {
           : weeklyActivities.length,
       updatedAt: now,
     );
+    // Update in-memory leaderboard immediately so it is reflected in UI
+    final existingIdx = _leaderboardBase.indexWhere(
+      (e) => e.uid == _profile.uid,
+    );
+    if (existingIdx >= 0) {
+      _leaderboardBase[existingIdx] = entry;
+    } else {
+      _leaderboardBase.add(entry);
+    }
+    _leaderboardBase.sort((a, b) => b.distanceM.compareTo(a.distanceM));
+    notifyListeners();
+
     try {
-      await lbRepo.upsertEntry(entry).timeout(const Duration(seconds: 5));
+      await lbRepo.upsertEntry(entry).timeout(const Duration(seconds: 6));
     } catch (_) {
       // Leaderboard sync failure should not block run save
     }
@@ -656,9 +679,7 @@ class NearPaceController extends ChangeNotifier {
   }
 
   void retryLeaderboard() {
-    _leaderboardState = ViewLoadState.ready;
-    _leaderboardError = null;
-    notifyListeners();
+    _subscribeToLeaderboard();
   }
 
   // --- Recording & Permission Flow ---
