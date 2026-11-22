@@ -138,6 +138,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: CustomPaint(
                               painter: _NearPaceMarkPainter(
                                 strokeColor: colors.onAccent,
+                                dotColor: NearPaceColors.light.accentText,
                               ),
                             ),
                           ),
@@ -397,34 +398,58 @@ class _AuthScreenState extends State<AuthScreen> {
 }
 
 class _NearPaceMarkPainter extends CustomPainter {
-  const _NearPaceMarkPainter({required this.strokeColor});
+  const _NearPaceMarkPainter({
+    required this.strokeColor,
+    required this.dotColor,
+  });
 
   final Color strokeColor;
+  final Color dotColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = strokeColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    // Option A ("Route Trace N") vector geometry on 256x256 grid with tile inset.
+    final scale = size.width / 256.0;
+    canvas.save();
+    canvas.scale(scale, scale);
+    canvas.translate(18.0, 18.0);
+    canvas.scale(0.859375, 0.859375);
 
-    final path = Path()
-      ..moveTo(size.width * 0.2, size.height * 0.68)
-      ..lineTo(size.width * 0.38, size.height * 0.34)
-      ..lineTo(size.width * 0.56, size.height * 0.62)
-      ..lineTo(size.width * 0.78, size.height * 0.28);
+    final routePath = Path()
+      ..fillType = PathFillType.evenOdd
+      ..moveTo(44, 188)
+      ..lineTo(44, 68)
+      ..lineTo(60, 52)
+      ..lineTo(84, 52)
+      ..lineTo(172, 140)
+      ..lineTo(172, 124)
+      ..arcToPoint(
+        const Offset(212, 124),
+        radius: const Radius.circular(20),
+      )
+      ..lineTo(212, 188)
+      ..lineTo(196, 204)
+      ..lineTo(172, 204)
+      ..lineTo(84, 116)
+      ..lineTo(84, 188)
+      ..arcToPoint(
+        const Offset(44, 188),
+        radius: const Radius.circular(20),
+      )
+      ..close()
+      ..addOval(Rect.fromCircle(center: const Offset(64, 188), radius: 8));
 
-    canvas.drawPath(path, paint);
+    canvas.drawPath(routePath, Paint()..color = strokeColor);
     canvas.drawCircle(
-      Offset(size.width * 0.78, size.height * 0.28),
-      3.0,
-      Paint()..color = strokeColor,
+      const Offset(192, 68),
+      20,
+      Paint()..color = dotColor,
     );
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _NearPaceMarkPainter oldDelegate) =>
-      oldDelegate.strokeColor != strokeColor;
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.dotColor != dotColor;
 }
