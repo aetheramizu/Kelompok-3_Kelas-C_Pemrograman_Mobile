@@ -102,6 +102,8 @@ class FirestoreActivityRepository implements ActivityRepository {
           'code': activity.weather!.code,
           'fetchedAt': Timestamp.fromDate(activity.weather!.fetchedAt.toUtc()),
         },
+      'isPublic': activity.isPublic,
+      if (activity.city != null) 'city': activity.city,
     };
   }
 
@@ -163,6 +165,8 @@ class FirestoreActivityRepository implements ActivityRepository {
       avgPaceSecPerKm: (map['avgPaceSecPerKm'] as num?)?.toDouble(),
       route: route,
       weather: weather,
+      isPublic: (map['isPublic'] as bool?) ?? true,
+      city: map['city'] as String?,
     );
   }
 }

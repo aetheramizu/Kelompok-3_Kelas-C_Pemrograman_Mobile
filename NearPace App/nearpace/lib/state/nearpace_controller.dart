@@ -280,12 +280,27 @@ class NearPaceController extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  List<Activity> get weeklyPublicActivities =>
+      weeklyActivities.where((a) => a.isPublic).toList(growable: false);
+
   double get weeklyDistanceMeters =>
       weeklyActivities.fold(0.0, (sum, a) => sum + a.distanceM);
+
+  double get weeklyPublicDistanceMeters =>
+      weeklyPublicActivities.fold(0.0, (sum, a) => sum + a.distanceM);
 
   Duration get weeklyDuration => Duration(
     seconds: weeklyActivities.fold(0, (sum, a) => sum + a.durationS),
   );
+
+  String get currentLeaderboardCity {
+    for (final a in weeklyActivities) {
+      if (a.isPublic && a.city != null && a.city!.trim().isNotEmpty) {
+        return a.city!.trim();
+      }
+    }
+    return _profile.city.trim();
+  }
 
   double? get weeklyAvgPaceSecPerKm {
     final distanceM = weeklyDistanceMeters;
@@ -317,10 +332,14 @@ class NearPaceController extends ChangeNotifier {
         LeaderboardEntry(
           uid: _profile.uid,
           displayName: _profile.displayName,
-          city: _profile.city,
+          city: currentLeaderboardCity,
           weekKey: currentWeekKey,
-          distanceM: weeklyDistanceMeters,
-          runCount: weeklyActivities.length,
+          distanceM: weeklyPublicDistanceMeters > 0
+              ? weeklyPublicDistanceMeters
+              : weeklyDistanceMeters,
+          runCount: weeklyPublicActivities.isNotEmpty
+              ? weeklyPublicActivities.length
+              : weeklyActivities.length,
           updatedAt: now,
         ),
       );
@@ -564,19 +583,31 @@ class NearPaceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncLeaderboardEntry() async {
+  Future<void> _syncLeaderboardEntry({String? runCity}) async {
     final lbRepo = leaderboardRepository;
     if (lbRepo == null) return;
+    final targetCity = (runCity != null && runCity.trim().isNotEmpty)
+        ? runCity.trim()
+        : currentLeaderboardCity;
+
     final entry = LeaderboardEntry(
       uid: _profile.uid,
       displayName: _profile.displayName,
-      city: _profile.city,
+      city: targetCity,
       weekKey: currentWeekKey,
-      distanceM: weeklyDistanceMeters,
-      runCount: weeklyActivities.length,
+      distanceM: weeklyPublicDistanceMeters > 0
+          ? weeklyPublicDistanceMeters
+          : weeklyDistanceMeters,
+      runCount: weeklyPublicActivities.isNotEmpty
+          ? weeklyPublicActivities.length
+          : weeklyActivities.length,
       updatedAt: now,
     );
-    await lbRepo.upsertEntry(entry);
+    try {
+      await lbRepo.upsertEntry(entry).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Leaderboard sync failure should not block run save
+    }
   }
 
   // --- Foreground Notification Banner Preview (FCM MVP UI) ---
@@ -888,7 +919,13 @@ class NearPaceController extends ChangeNotifier {
         if (idx >= 0 && savedId != activity.id) {
           _activities[idx] = activity.copyWith(id: savedId);
         }
-        if (_profile.showOnLeaderboard) {
+        if (activity.isPublic) {
+          if (!_profile.showOnLeaderboard) {
+            _profile = _profile.copyWith(showOnLeaderboard: true);
+            profileRepository?.setShowOnLeaderboard(_profile.uid, true);
+          }
+          await _syncLeaderboardEntry(runCity: activity.city);
+        } else if (_profile.showOnLeaderboard) {
           await _syncLeaderboardEntry();
         }
       } finally {

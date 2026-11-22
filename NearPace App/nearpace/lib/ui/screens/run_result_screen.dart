@@ -30,6 +30,32 @@ class RunResultScreen extends StatefulWidget {
 class _RunResultScreenState extends State<RunResultScreen> {
   bool _isSaving = false;
   bool _isDeleting = false;
+  bool _isPublic = true;
+  late final TextEditingController _cityController;
+
+  @override
+  void initState() {
+    super.initState();
+    _isPublic = widget.activity.isPublic;
+    _cityController = TextEditingController(text: widget.activity.city ?? '');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_cityController.text.isEmpty) {
+      final profCity = context.read<NearPaceController>().profile.city;
+      if (profCity.trim().isNotEmpty) {
+        _cityController.text = profCity.trim();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _cityController.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirmDiscard() async {
     final discard = await showDialog<bool>(
@@ -120,14 +146,28 @@ class _RunResultScreenState extends State<RunResultScreen> {
     final nav = Navigator.of(context);
     setState(() => _isSaving = true);
     try {
-      await controller.saveActivity(widget.activity);
+      final cityInput = _cityController.text.trim();
+      final effectiveCity = cityInput.isNotEmpty
+          ? cityInput
+          : (widget.activity.city ?? controller.profile.city);
+
+      final activityToSave = widget.activity.copyWith(
+        isPublic: _isPublic,
+        city: effectiveCity,
+      );
+
+      await controller.saveActivity(activityToSave);
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text(
             controller.isLocalPreview
-                ? 'Run saved to history.'
-                : 'Run saved to your account.',
+                ? (_isPublic
+                      ? 'Run saved and posted to leaderboard.'
+                      : 'Run saved privately to history.')
+                : (_isPublic
+                      ? 'Run saved and posted to $effectiveCity leaderboard!'
+                      : 'Run saved privately to your history.'),
           ),
         ),
       );
@@ -347,6 +387,84 @@ class _RunResultScreenState extends State<RunResultScreen> {
                               ),
                               const SizedBox(height: NearPaceSpacing.xs),
                               WeatherSummaryCard(weather: activity.weather),
+
+                              if (isUnsaved) ...[
+                                const SizedBox(height: NearPaceSpacing.lg),
+                                Text(
+                                  'Visibilitas & Leaderboard',
+                                  style: textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: NearPaceSpacing.xs),
+                                NearPaceCard(
+                                  padding: const EdgeInsets.all(
+                                    NearPaceSpacing.md,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            _isPublic
+                                                ? Icons.public_rounded
+                                                : Icons.lock_outline_rounded,
+                                            color: _isPublic
+                                                ? colors.performanceGreen
+                                                : colors.textSecondary,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(
+                                            width: NearPaceSpacing.xs,
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              _isPublic
+                                                  ? 'Post ke Leaderboard Publik'
+                                                  : 'Privat (Hanya Saya)',
+                                              style: textTheme.titleSmall,
+                                            ),
+                                          ),
+                                          Switch(
+                                            value: _isPublic,
+                                            onChanged: (val) {
+                                              setState(() => _isPublic = val);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(
+                                        height: NearPaceSpacing.xxs,
+                                      ),
+                                      Text(
+                                        _isPublic
+                                            ? 'Jarak lari ini akan diposting ke papan peringkat kota Anda.'
+                                            : 'Lari ini disimpan secara privat dan tidak akan muncul di leaderboard publik.',
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: colors.textSecondary,
+                                        ),
+                                      ),
+                                      if (_isPublic) ...[
+                                        const SizedBox(
+                                          height: NearPaceSpacing.md,
+                                        ),
+                                        TextFormField(
+                                          controller: _cityController,
+                                          decoration: InputDecoration(
+                                            labelText: 'Kota Daerah Lari (Leaderboard)',
+                                            hintText: 'e.g. Makassar, Jakarta, Surabaya',
+                                            isDense: true,
+                                            prefixIcon: const Icon(
+                                              Icons.location_city_rounded,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
