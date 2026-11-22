@@ -1,3 +1,4 @@
+import 'package:geolocator/geolocator.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../state/nearpace_controller.dart';
@@ -8,20 +9,53 @@ import '../../theme/nearpace_spacing.dart';
 Future<LocationPermissionStatus?> showLocationPermissionSheet(
   BuildContext context, {
   required LocationPermissionStatus currentStatus,
+  bool isLocalPreview = true,
 }) {
   return showModalBottomSheet<LocationPermissionStatus>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) =>
-        _LocationPermissionSheet(currentStatus: currentStatus),
+    builder: (context) => _LocationPermissionSheet(
+      currentStatus: currentStatus,
+      isLocalPreview: isLocalPreview,
+    ),
   );
 }
 
 class _LocationPermissionSheet extends StatelessWidget {
-  const _LocationPermissionSheet({required this.currentStatus});
+  const _LocationPermissionSheet({
+    required this.currentStatus,
+    this.isLocalPreview = true,
+  });
 
   final LocationPermissionStatus currentStatus;
+  final bool isLocalPreview;
+
+  Future<void> _handlePrimaryAction(BuildContext context) async {
+    final isPermanent = currentStatus == LocationPermissionStatus.deniedForever;
+    if (!isLocalPreview) {
+      if (isPermanent) {
+        await Geolocator.openAppSettings();
+        if (context.mounted) Navigator.of(context).pop();
+        return;
+      }
+      final permission = await Geolocator.requestPermission();
+      if (context.mounted) {
+        final status = switch (permission) {
+          LocationPermission.always ||
+          LocationPermission.whileInUse => LocationPermissionStatus.granted,
+          LocationPermission.denied => LocationPermissionStatus.denied,
+          LocationPermission.deniedForever ||
+          LocationPermission.unableToDetermine =>
+            LocationPermissionStatus.deniedForever,
+        };
+        Navigator.of(context).pop(status);
+      }
+      return;
+    }
+
+    Navigator.of(context).pop(LocationPermissionStatus.granted);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,37 +142,48 @@ class _LocationPermissionSheet extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(LocationPermissionStatus.granted),
+                onPressed: () => _handlePrimaryAction(context),
                 child: Text(
                   isPermanent
-                      ? 'Grant in preview (simulate settings)'
+                      ? (isLocalPreview
+                            ? 'Grant in preview (simulate settings)'
+                            : 'Open Android settings')
                       : 'Allow while using app',
                 ),
               ),
             ),
             const SizedBox(height: NearPaceSpacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        Navigator.of(context)
-                            .pop(LocationPermissionStatus.denied),
-                    child: const Text('Deny'),
+            if (isLocalPreview) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pop(LocationPermissionStatus.denied),
+                      child: const Text('Deny'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: NearPaceSpacing.xs),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        Navigator.of(context)
-                            .pop(LocationPermissionStatus.deniedForever),
-                    child: const Text('Deny forever'),
+                  const SizedBox(width: NearPaceSpacing.xs),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .pop(LocationPermissionStatus.deniedForever),
+                      child: const Text('Deny forever'),
+                    ),
                   ),
+                ],
+              ),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),

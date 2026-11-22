@@ -19,7 +19,8 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
 
       match /activities/{activityId} {
-        allow read, write: if isOwner(uid)
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
           && (!request.resource.data.keys().hasAny(['distanceM', 'durationS'])
               || (request.resource.data.distanceM is number
                   && request.resource.data.distanceM >= 0
@@ -28,15 +29,15 @@ service cloud.firestore {
       }
     }
 
-    // Public weekly aggregates. Any signed-in user may read; a user may only write
+    // Public weekly aggregates. Anyone may read; a user may only write
     // the document that belongs to them, and the document id must match weekKey_uid.
     match /leaderboard/{entryId} {
-      allow read: if signedIn();
+      allow read: if true;
 
       allow create, update: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && entryId == request.resource.data.weekKey + '_' + request.auth.uid
-        && entryId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_' + request.auth.uid + '$')
+        && request.resource.data.weekKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.keys().hasOnly(
              ['uid', 'displayName', 'city', 'weekKey', 'distanceM', 'runCount', 'updatedAt'])
         && request.resource.data.displayName is string
@@ -47,7 +48,7 @@ service cloud.firestore {
         && request.resource.data.distanceM is number
         && request.resource.data.distanceM >= 0
         && request.resource.data.distanceM <= 1000000
-        && request.resource.data.runCount is int
+        && (request.resource.data.runCount is int || request.resource.data.runCount is number)
         && request.resource.data.runCount >= 0
         && request.resource.data.updatedAt is timestamp;
 

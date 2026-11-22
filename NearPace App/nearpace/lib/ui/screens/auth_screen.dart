@@ -41,13 +41,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _switchMode(_AuthMode mode) {
     if (_mode == mode) return;
+    _formKey.currentState?.reset();
     setState(() {
       _mode = mode;
       _formErrorSummary = null;
     });
   }
 
-  void _submit(NearPaceController controller) {
+  Future<void> _submit(NearPaceController controller) async {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) {
       setState(() {
@@ -57,14 +58,26 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     setState(() => _formErrorSummary = null);
-    if (_mode == _AuthMode.signIn) {
-      controller.signInLocalPreview(email: _emailController.text);
-    } else {
-      controller.signUpLocalPreview(
-        email: _emailController.text,
-        displayName: _nameController.text,
-        city: _cityController.text,
-      );
+    try {
+      if (_mode == _AuthMode.signIn) {
+        await controller.signIn(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+      } else {
+        await controller.signUp(
+          email: _emailController.text,
+          password: _passwordController.text,
+          displayName: _nameController.text,
+          city: _cityController.text,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _formErrorSummary = controller.authError ?? e.toString();
+        });
+      }
     }
   }
 
@@ -82,8 +95,7 @@ class _AuthScreenState extends State<AuthScreen> {
     ) = switch (controller.firebaseStatus) {
       FirebaseReady() => (
         'Firebase ready',
-        'Firebase Core is initialized. Forms currently run in local '
-            'preview until auth services are wired.',
+        'Connected to Firebase. Sign in or sign up with your account.',
         colors.performanceGreen,
         colors.deepGreenSurface,
       ),
@@ -217,7 +229,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                     ),
                                     ButtonSegment(
                                       value: _AuthMode.signUp,
-                                      label: Text('Create account'),
+                                      label: Text('Sign up'),
                                     ),
                                   ],
                                   selected: {_mode},
@@ -265,8 +277,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [AutofillHints.name],
                                     maxLength: 40,
+                                    onFieldSubmitted: (_) =>
+                                        _submit(controller),
                                     decoration: const InputDecoration(
-                                      labelText: 'Display name',
+                                      labelText: 'Display name (optional)',
                                       hintText: 'e.g. Alief Pratama',
                                       counterText: '',
                                     ),
@@ -275,10 +289,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                         return null;
                                       }
                                       final trimmed = value?.trim() ?? '';
-                                      if (trimmed.isEmpty) {
-                                        return 'Enter a display name.';
-                                      }
-                                      if (trimmed.length < 2) {
+                                      if (trimmed.isNotEmpty &&
+                                          trimmed.length < 2) {
                                         return 'Use at least 2 characters.';
                                       }
                                       return null;
@@ -289,6 +301,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                     controller: _cityController,
                                     textInputAction: TextInputAction.next,
                                     maxLength: 60,
+                                    onFieldSubmitted: (_) =>
+                                        _submit(controller),
                                     decoration: const InputDecoration(
                                       labelText: 'City (optional)',
                                       hintText:
@@ -304,6 +318,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   autofillHints: const [AutofillHints.email],
+                                  onFieldSubmitted: (_) => _submit(controller),
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
                                     hintText: 'runner@example.com',
@@ -361,11 +376,45 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                                 const SizedBox(height: NearPaceSpacing.lg),
                                 FilledButton(
-                                  onPressed: () => _submit(controller),
-                                  child: Text(
-                                    _mode == _AuthMode.signIn
-                                        ? 'Sign in (preview)'
-                                        : 'Create profile (preview)',
+                                  onPressed: controller.isAuthBusy
+                                      ? null
+                                      : () => _submit(controller),
+                                  child: controller.isAuthBusy
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _mode == _AuthMode.signIn
+                                              ? (controller.isLocalPreview
+                                                    ? 'Sign in (preview)'
+                                                    : 'Sign in')
+                                              : (controller.isLocalPreview
+                                                    ? 'Sign up (preview)'
+                                                    : 'Sign up'),
+                                        ),
+                                ),
+                                const SizedBox(height: NearPaceSpacing.xs),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () => _switchMode(
+                                      _mode == _AuthMode.signIn
+                                          ? _AuthMode.signUp
+                                          : _AuthMode.signIn,
+                                    ),
+                                    child: Text(
+                                      _mode == _AuthMode.signIn
+                                          ? "Don't have an account? Sign up"
+                                          : 'Already have an account? Sign in',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colors.accent,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],

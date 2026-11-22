@@ -12,6 +12,8 @@ class Activity {
     required this.avgPaceSecPerKm,
     required this.route,
     this.weather,
+    this.isPublic = true,
+    this.city,
   });
 
   final String id;
@@ -22,6 +24,8 @@ class Activity {
   final double? avgPaceSecPerKm;
   final List<GeoPointLite> route;
   final WeatherSnapshot? weather;
+  final bool isPublic;
+  final String? city;
 
   double get distanceKm => distanceM / 1000;
 
@@ -29,7 +33,12 @@ class Activity {
 
   bool get hasRoute => route.length >= 2;
 
-  Activity copyWith({String? id, WeatherSnapshot? weather}) => Activity(
+  Activity copyWith({
+    String? id,
+    WeatherSnapshot? weather,
+    bool? isPublic,
+    String? city,
+  }) => Activity(
     id: id ?? this.id,
     startedAt: startedAt,
     endedAt: endedAt,
@@ -38,6 +47,8 @@ class Activity {
     avgPaceSecPerKm: avgPaceSecPerKm,
     route: route,
     weather: weather ?? this.weather,
+    isPublic: isPublic ?? this.isPublic,
+    city: city ?? this.city,
   );
 
   Map<String, dynamic> toMap() => {
@@ -48,6 +59,8 @@ class Activity {
     'avgPaceSecPerKm': avgPaceSecPerKm,
     'route': route.map((point) => point.toMap()).toList(),
     if (weather != null) 'weather': weather!.toMap(),
+    'isPublic': isPublic,
+    if (city != null) 'city': city,
   };
 
   static Activity fromMap(String id, Map<String, dynamic> map) {
@@ -63,6 +76,8 @@ class Activity {
           .map((entry) => GeoPointLite.fromMap(entry as Map<String, dynamic>))
           .toList(growable: false),
       weather: WeatherSnapshot.fromMap(map['weather'] as Map<String, dynamic>?),
+      isPublic: (map['isPublic'] as bool?) ?? true,
+      city: map['city'] as String?,
     );
   }
 }
