@@ -425,17 +425,23 @@ class NearPaceController extends ChangeNotifier {
         signUpLocalPreview(email: email, displayName: displayName, city: city);
       } else {
         final uid = await authRepo.signUp(email: email, password: password);
+        final trimmedName = displayName.trim();
+        final effectiveName = trimmedName.isNotEmpty
+            ? trimmedName
+            : (email.contains('@') ? email.split('@').first : 'Runner');
         final newProfile = UserProfile(
           uid: uid,
           email: email.trim(),
-          displayName: displayName.trim().isEmpty
-              ? 'Runner'
-              : displayName.trim(),
+          displayName: effectiveName,
           city: city.trim(),
           showOnLeaderboard: false,
         );
         _profile = newProfile;
-        await profileRepository?.upsertProfile(newProfile, isNew: true);
+        try {
+          await profileRepository?.upsertProfile(newProfile, isNew: true);
+        } catch (_) {
+          // If Firestore initial write times out, session still proceeds.
+        }
         _isSignedIn = true;
         _selectedTabIndex = 0;
         _subscribeToUserData(uid);

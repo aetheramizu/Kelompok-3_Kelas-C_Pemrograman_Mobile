@@ -39,7 +39,9 @@ class FirestoreProfileRepository implements ProfileRepository {
 
   @override
   Future<UserProfile?> getProfile(String uid) async {
-    final snapshot = await _userDoc(uid).get();
+    final snapshot = await _userDoc(uid)
+        .get()
+        .timeout(const Duration(seconds: 6));
     final data = snapshot.data();
     if (!snapshot.exists || data == null) return null;
     return UserProfile.fromMap(uid, data);
@@ -52,7 +54,9 @@ class FirestoreProfileRepository implements ProfileRepository {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
     data['updatedAt'] = FieldValue.serverTimestamp();
-    await _userDoc(profile.uid).set(data, SetOptions(merge: true));
+    await _userDoc(profile.uid)
+        .set(data, SetOptions(merge: true))
+        .timeout(const Duration(seconds: 6));
   }
 
   @override
