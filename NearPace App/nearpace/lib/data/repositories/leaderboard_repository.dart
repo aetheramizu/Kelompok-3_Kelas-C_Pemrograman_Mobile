@@ -23,17 +23,15 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
 
   @override
   Stream<List<LeaderboardEntry>> watchWeeklyLeaderboard(String weekKey) {
-    return _leaderboardCol
-        .where('weekKey', isEqualTo: weekKey)
-        .orderBy('distanceM', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                return _entryFromFirestore(doc.data());
-              })
-              .toList(growable: false);
-        });
+    return _leaderboardCol.where('weekKey', isEqualTo: weekKey).snapshots().map(
+      (snapshot) {
+        final list = snapshot.docs
+            .map((doc) => _entryFromFirestore(doc.data()))
+            .toList(growable: true);
+        list.sort((a, b) => b.distanceM.compareTo(a.distanceM));
+        return list;
+      },
+    );
   }
 
   @override
