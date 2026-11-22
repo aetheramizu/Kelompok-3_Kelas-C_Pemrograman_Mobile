@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/firebase_bootstrap.dart';
 import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
@@ -28,79 +27,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showBackendStatusSheet(
-    BuildContext context,
-    FirebaseBootstrapStatus status,
-  ) {
-    final colors = context.npColors;
-    final textTheme = Theme.of(context).textTheme;
-    final (title, detail) = switch (status) {
-      FirebaseReady() => (
-        'Firebase connected',
-        'Connected to cloud database. Runs and leaderboards sync automatically.',
-      ),
-      FirebaseUnconfigured(:final missingKeys) => (
-        'Local preview mode',
-        missingKeys.isEmpty
-            ? 'Firebase options were not supplied at build time. Runs and '
-                  'profile edits remain local to this session.'
-            : 'Firebase options are not configured (missing: '
-                  '${missingKeys.join(', ')}). Runs and profile edits remain '
-                  'local to this preview session.',
-      ),
-      FirebaseInitFailed(:final message) => (
-        'Firebase initialization failed',
-        'NearPace fell back to local preview mode. Error: $message',
-      ),
-    };
-
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            NearPaceSpacing.xl,
-            NearPaceSpacing.xs,
-            NearPaceSpacing.xl,
-            NearPaceSpacing.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    status is FirebaseReady
-                        ? Icons.cloud_done_outlined
-                        : Icons.cloud_off_outlined,
-                    color: status is FirebaseReady
-                        ? colors.performanceGreen
-                        : colors.textSecondary,
-                  ),
-                  const SizedBox(width: NearPaceSpacing.xs),
-                  Expanded(child: Text(title, style: textTheme.titleLarge)),
-                ],
-              ),
-              const SizedBox(height: NearPaceSpacing.sm),
-              Text(detail, style: textTheme.bodyMedium),
-              const SizedBox(height: NearPaceSpacing.lg),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Got it'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<NearPaceController>();
@@ -109,32 +35,9 @@ class HomeScreen extends StatelessWidget {
     final profile = controller.profile;
     final firstName = profile.displayName.trim().split(RegExp(r'\s+')).first;
     final recentRuns = controller.activities.take(3).toList(growable: false);
-
-    final (
-      statusLabel,
-      statusIcon,
-      statusFg,
-      statusBg,
-    ) = switch (controller.firebaseStatus) {
-      FirebaseReady() => (
-        'Firebase ready',
-        Icons.cloud_done_outlined,
-        colors.performanceGreen,
-        colors.deepGreenSurface,
-      ),
-      FirebaseUnconfigured() => (
-        'Local preview',
-        Icons.offline_bolt_outlined,
-        colors.textSecondary,
-        colors.surfaceElevated,
-      ),
-      FirebaseInitFailed() => (
-        'Firebase error',
-        Icons.warning_amber_rounded,
-        colors.danger,
-        colors.dangerSurface,
-      ),
-    };
+    final nextReminderLabel = profile.runReminder.nextSummaryLabel(
+      controller.now,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -218,14 +121,19 @@ class HomeScreen extends StatelessWidget {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: StatusPill(
-                          label: statusLabel,
-                          icon: statusIcon,
-                          foregroundColor: statusFg,
-                          backgroundColor: statusBg,
-                          onTap: () => _showBackendStatusSheet(
-                            context,
-                            controller.firebaseStatus,
-                          ),
+                          label: nextReminderLabel != null
+                              ? 'Next run · $nextReminderLabel'
+                              : 'Set a run reminder',
+                          icon: nextReminderLabel != null
+                              ? Icons.notifications_active_outlined
+                              : Icons.alarm_add_rounded,
+                          foregroundColor: nextReminderLabel != null
+                              ? colors.accentText
+                              : colors.textSecondary,
+                          backgroundColor: nextReminderLabel != null
+                              ? colors.deepGreenSurface
+                              : colors.surfaceElevated,
+                          onTap: () => controller.setTabIndex(3),
                         ),
                       ),
                       const SizedBox(height: NearPaceSpacing.md),

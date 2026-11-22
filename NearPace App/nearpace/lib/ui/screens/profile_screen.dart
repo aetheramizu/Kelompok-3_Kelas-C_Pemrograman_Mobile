@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/firebase_bootstrap.dart';
+import '../../domain/run_reminder.dart';
 import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
@@ -11,8 +11,8 @@ import '../widgets/nearpace_card.dart';
 import '../widgets/state_views.dart';
 
 /// Runner profile and settings screen covering display name, optional city,
-/// weekly leaderboard opt-in, appearance, foreground notification preview,
-/// Firebase configuration status, and sign out.
+/// personal bests, run reminders, weekly updates, leaderboard privacy,
+/// appearance, and sign out.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -36,21 +36,43 @@ class ProfileScreen extends StatelessWidget {
         city: result.city,
       );
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            controller.isLocalPreview
-                ? 'Profile updated for this preview session.'
-                : 'Profile updated successfully.',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Profile updated.')));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
     }
+  }
+
+  Future<void> _pickReminderTime(
+    BuildContext context,
+    NearPaceController controller,
+  ) async {
+    final reminder = controller.profile.runReminder;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: reminder.hour, minute: reminder.minute),
+    );
+    if (picked == null || !context.mounted) return;
+    await controller.updateRunReminder(
+      reminder.copyWith(hour: picked.hour, minute: picked.minute),
+    );
+  }
+
+  Future<void> _toggleWeekday(
+    NearPaceController controller,
+    int weekday,
+  ) async {
+    final reminder = controller.profile.runReminder;
+    final updated = Set<int>.from(reminder.weekdays);
+    if (updated.contains(weekday)) {
+      updated.remove(weekday);
+    } else {
+      updated.add(weekday);
+    }
+    await controller.updateRunReminder(reminder.copyWith(weekdays: updated));
   }
 
   Future<void> _confirmSignOut(
@@ -62,8 +84,8 @@ class ProfileScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Sign out of NearPace?'),
         content: const Text(
-          'You will return to the sign-in screen. Local preview changes stay '
-          'only for the active app session.',
+          'You will return to the sign-in screen. Sign back in anytime to '
+          'access your saved runs.',
         ),
         actions: [
           TextButton(
@@ -92,35 +114,10 @@ class ProfileScreen extends StatelessWidget {
     final colors = context.npColors;
     final textTheme = Theme.of(context).textTheme;
     final profile = controller.profile;
-
-    final (
-      firebaseTitle,
-      firebaseDetail,
-      firebaseColor,
-      firebaseBg,
-    ) = switch (controller.firebaseStatus) {
-      FirebaseReady() => (
-        'Firebase connected',
-        'Connected to Cloud Firestore, Authentication, and push notifications.',
-        colors.performanceGreen,
-        colors.deepGreenSurface,
-      ),
-      FirebaseUnconfigured(:final missingKeys) => (
-        'Firebase not configured',
-        missingKeys.isEmpty
-            ? 'Running in local UI preview mode.'
-            : 'Missing build-time keys: ${missingKeys.join(', ')}. '
-                  'Running in local UI preview mode without cloud sync.',
-        colors.textSecondary,
-        colors.surfaceElevated,
-      ),
-      FirebaseInitFailed(:final message) => (
-        'Firebase initialization failed',
-        'Falling back to local preview mode. Error: $message',
-        colors.danger,
-        colors.dangerSurface,
-      ),
-    };
+    final reminder = profile.runReminder;
+    final hasRuns = controller.activities.isNotEmpty;
+    final bestPace = controller.bestPaceSecPerKm;
+    final nextReminderLabel = reminder.nextSummaryLabel(controller.now);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -245,6 +242,244 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: NearPaceSpacing.lg),
 
+                      // Personal Bests.
+                      Text('Personal bests', style: textTheme.titleMedium),
+                      const SizedBox(height: NearPaceSpacing.xs),
+                      NearPaceCard(
+                        padding: const EdgeInsets.all(NearPaceSpacing.md),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: MetricTile(
+                                label: 'Longest run',
+                                value: hasRuns
+                                    ? NearPaceFormatters.distanceKmValue(
+                                        controller.longestRunMeters,
+                                        decimals: 1,
+                                      )
+                                    : '--',
+                                unit: hasRuns ? 'km' : null,
+                                highlight: hasRuns,
+                                compact: true,
+                              ),
+                            ),
+                            const SizedBox(width: NearPaceSpacing.xs),
+                            Expanded(
+                              child: MetricTile(
+                                label: 'Best pace',
+                                value: NearPaceFormatters.paceValue(bestPace),
+                                unit: bestPace == null ? null : '/km',
+                                compact: true,
+                              ),
+                            ),
+                            const SizedBox(width: NearPaceSpacing.xs),
+                            Expanded(
+                              child: MetricTile(
+                                label: 'Total time',
+                                value: hasRuns
+                                    ? NearPaceFormatters.durationCompact(
+                                        controller.totalDuration,
+                                      )
+                                    : '--',
+                                compact: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: NearPaceSpacing.lg),
+
+                      // Notifications & Run Reminders.
+                      Text('Notifications', style: textTheme.titleMedium),
+                      const SizedBox(height: NearPaceSpacing.xs),
+                      NearPaceCard(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: NearPaceSpacing.md,
+                          vertical: NearPaceSpacing.xs,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                'Run reminders',
+                                style: textTheme.titleSmall,
+                              ),
+                              subtitle: Text(
+                                reminder.enabled
+                                    ? (nextReminderLabel != null
+                                          ? 'Next reminder: $nextReminderLabel'
+                                          : 'Pick at least one day below.')
+                                    : 'Get scheduled nudges on your running days.',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: reminder.isActive
+                                      ? colors.accentText
+                                      : colors.textSecondary,
+                                ),
+                              ),
+                              value: reminder.enabled,
+                              onChanged: (enabled) async {
+                                final nextDays =
+                                    enabled && reminder.weekdays.isEmpty
+                                    ? RunReminder.defaultWeekdays
+                                    : reminder.weekdays;
+                                await controller.updateRunReminder(
+                                  reminder.copyWith(
+                                    enabled: enabled,
+                                    weekdays: nextDays,
+                                  ),
+                                );
+                              },
+                            ),
+                            if (reminder.enabled) ...[
+                              Divider(color: colors.border),
+                              const SizedBox(height: NearPaceSpacing.xs),
+                              Text(
+                                'Repeat days',
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.xs),
+                              Wrap(
+                                spacing: NearPaceSpacing.xs,
+                                runSpacing: NearPaceSpacing.xs,
+                                children: List.generate(7, (index) {
+                                  final weekday = index + 1;
+                                  final selected = reminder.weekdays.contains(
+                                    weekday,
+                                  );
+                                  return _WeekdayChip(
+                                    weekday: weekday,
+                                    selected: selected,
+                                    onTap: () =>
+                                        _toggleWeekday(controller, weekday),
+                                  );
+                                }),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.sm),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(
+                                  NearPaceSpacing.radiusSm,
+                                ),
+                                onTap: () =>
+                                    _pickReminderTime(context, controller),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: NearPaceSpacing.xs,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.schedule_rounded,
+                                        size: 20,
+                                        color: colors.textSecondary,
+                                      ),
+                                      const SizedBox(width: NearPaceSpacing.xs),
+                                      Expanded(
+                                        child: Text(
+                                          'Reminder time',
+                                          style: textTheme.titleSmall,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: NearPaceSpacing.sm,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colors.deepGreenSurface,
+                                          borderRadius: BorderRadius.circular(
+                                            NearPaceSpacing.radiusPill,
+                                          ),
+                                          border: Border.all(
+                                            color: colors.accentText.withValues(
+                                              alpha: 0.35,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          reminder.formattedTime,
+                                          style: textTheme.labelLarge?.copyWith(
+                                            color: colors.accentText,
+                                            fontWeight: FontWeight.w700,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 20,
+                                        color: colors.textMuted,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.xs),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await controller.sendTestReminder();
+                                    if (!context.mounted ||
+                                        controller.isLocalPreview) {
+                                      return;
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Test reminder sent!'),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.notifications_active_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Send test reminder'),
+                                ),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.xs),
+                            ],
+                            Divider(color: colors.border),
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                'Weekly updates',
+                                style: textTheme.titleSmall,
+                              ),
+                              subtitle: Text(
+                                'Leaderboard resets and weekly run highlights.',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                              value: profile.receiveUpdates,
+                              onChanged: (value) async {
+                                try {
+                                  await controller.setReceiveUpdates(value);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to update notification '
+                                        'preferences: $e',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: NearPaceSpacing.lg),
+
                       // Privacy & Leaderboard.
                       Text('Privacy', style: textTheme.titleMedium),
                       const SizedBox(height: NearPaceSpacing.xs),
@@ -333,120 +568,6 @@ class ProfileScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: NearPaceSpacing.lg),
-
-                      // Notifications (FCM foreground banner UI).
-                      Text('Notifications', style: textTheme.titleMedium),
-                      const SizedBox(height: NearPaceSpacing.xs),
-                      NearPaceCard(
-                        padding: const EdgeInsets.all(NearPaceSpacing.md),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.notifications_none_rounded,
-                                  size: 20,
-                                  color: colors.textSecondary,
-                                ),
-                                const SizedBox(width: NearPaceSpacing.xs),
-                                Expanded(
-                                  child: Text(
-                                    'Topic: nearpace_updates',
-                                    style: textTheme.titleSmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: NearPaceSpacing.xxs),
-                            Text(
-                              'Foreground alerts and updates render as an in-app banner.',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                            if (controller.isLocalPreview) ...[
-                              const SizedBox(height: NearPaceSpacing.sm),
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  controller.triggerPreviewNotification(
-                                    title: 'NearPace update',
-                                    body:
-                                        'Weekly leaderboard resets Monday at '
-                                        '00:00 local time.',
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.campaign_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('Preview foreground banner'),
-                              ),
-                            ] else ...[
-                              const SizedBox(height: NearPaceSpacing.xs),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_outline_rounded,
-                                    size: 16,
-                                    color: colors.performanceGreen,
-                                  ),
-                                  const SizedBox(width: NearPaceSpacing.xxs),
-                                  Text(
-                                    'Live FCM notifications active',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colors.performanceGreen,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.lg),
-
-                      // Backend connection status (honest transparency).
-                      Text('Connection status', style: textTheme.titleMedium),
-                      const SizedBox(height: NearPaceSpacing.xs),
-                      NearPaceCard(
-                        backgroundColor: firebaseBg,
-                        borderColor: firebaseColor.withValues(alpha: 0.35),
-                        padding: const EdgeInsets.all(NearPaceSpacing.md),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              controller.firebaseStatus is FirebaseReady
-                                  ? Icons.cloud_done_outlined
-                                  : Icons.cloud_off_outlined,
-                              size: 20,
-                              color: firebaseColor,
-                            ),
-                            const SizedBox(width: NearPaceSpacing.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    firebaseTitle,
-                                    style: textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    firebaseDetail,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: NearPaceSpacing.xl),
 
                       // Sign out.
@@ -464,6 +585,15 @@ class ProfileScreen extends StatelessWidget {
                           label: const Text('Sign out'),
                         ),
                       ),
+                      const SizedBox(height: NearPaceSpacing.md),
+                      Center(
+                        child: Text(
+                          'NearPace v1.0.0',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colors.textMuted,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -472,6 +602,69 @@ class ProfileScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _WeekdayChip extends StatelessWidget {
+  const _WeekdayChip({
+    required this.weekday,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int weekday;
+  final bool selected;
+  final VoidCallback onTap;
+
+  static const _fullNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.npColors;
+    final textTheme = Theme.of(context).textTheme;
+    final letter = NearPaceFormatters.weekdayInitial(weekday);
+    final name = _fullNames[(weekday - 1).clamp(0, 6)];
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: name,
+      child: Material(
+        color: selected ? colors.accent : colors.surfaceElevated,
+        shape: CircleBorder(
+          side: BorderSide(color: selected ? colors.accent : colors.border),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  letter,
+                  maxLines: 1,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: selected ? colors.onAccent : colors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -540,7 +733,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
               const SizedBox(height: NearPaceSpacing.xs),
               Text(
                 'Display name and city appear on the weekly leaderboard only '
-                'if you opt in.',
+                'when you join.',
                 style: textTheme.bodyMedium,
               ),
               const SizedBox(height: NearPaceSpacing.md),

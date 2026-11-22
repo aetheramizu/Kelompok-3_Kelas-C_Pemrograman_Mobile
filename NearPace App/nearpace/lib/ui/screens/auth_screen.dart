@@ -173,44 +173,44 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: NearPaceSpacing.lg),
 
-                      // Honest Firebase bootstrap readout.
-                      NearPaceCard(
-                        backgroundColor: statusBg,
-                        borderColor: statusColor.withValues(alpha: 0.35),
-                        padding: const EdgeInsets.all(NearPaceSpacing.sm),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              controller.firebaseStatus is FirebaseReady
-                                  ? Icons.cloud_done_outlined
-                                  : Icons.info_outline_rounded,
-                              size: 18,
-                              color: statusColor,
-                            ),
-                            const SizedBox(width: NearPaceSpacing.xs),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    statusTitle,
-                                    style: textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    statusDetail,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colors.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                      if (controller.firebaseStatus is! FirebaseReady) ...[
+                        // Show bootstrap notice only when offline or initialization failed.
+                        NearPaceCard(
+                          backgroundColor: statusBg,
+                          borderColor: statusColor.withValues(alpha: 0.35),
+                          padding: const EdgeInsets.all(NearPaceSpacing.sm),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: statusColor,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: NearPaceSpacing.xs),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      statusTitle,
+                                      style: textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      statusDetail,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.lg),
+                        const SizedBox(height: NearPaceSpacing.lg),
+                      ],
 
                       // Mode switch + Auth form card.
                       NearPaceCard(

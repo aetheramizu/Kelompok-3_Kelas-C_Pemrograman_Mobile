@@ -11,12 +11,14 @@ import '../data/repositories/weather_repository.dart';
 import '../domain/activity.dart';
 import '../domain/geo_point.dart';
 import '../domain/leaderboard_entry.dart';
+import '../domain/run_reminder.dart';
 import '../domain/run_session.dart';
 import '../domain/run_state.dart';
 import '../domain/user_profile.dart';
 import '../domain/weather.dart';
 import '../services/location_tracking_service.dart';
 import '../services/push_notification_service.dart';
+import '../services/run_reminder_service.dart';
 import '../utils/formatters.dart';
 import 'mock_data.dart';
 
@@ -59,6 +61,7 @@ class NearPaceController extends ChangeNotifier {
     this.weatherRepository,
     this.locationService,
     this.pushService,
+    this.reminderService,
   }) : _clockAnchor = clockNow,
        _isSignedIn = startSignedIn,
        _isLocalPreview = isLocalPreview ?? (firebaseStatus is! FirebaseReady),
@@ -83,6 +86,9 @@ class NearPaceController extends ChangeNotifier {
   final WeatherRepository? weatherRepository;
   final LocationTrackingService? locationService;
   final PushNotificationService? pushService;
+  final RunReminderService? reminderService;
+
+  RunReminder? _lastSyncedReminder;
 
   DateTime get now => _clockAnchor ?? DateTime.now();
 
@@ -207,6 +213,10 @@ class NearPaceController extends ChangeNotifier {
       _profileSubscription = profRepo.watchProfile(uid).listen((profile) {
         if (profile != null) {
           _profile = profile;
+          if (_lastSyncedReminder != profile.runReminder) {
+            _lastSyncedReminder = profile.runReminder;
+            unawaited(reminderService?.syncSchedule(profile.runReminder));
+          }
           notifyListeners();
         }
       });
@@ -240,7 +250,11 @@ class NearPaceController extends ChangeNotifier {
         if (token != null && token.isNotEmpty) {
           profileRepository?.updateFcmToken(uid, token);
         }
-        push.subscribeToTopic('nearpace_updates');
+        if (_profile.receiveUpdates) {
+          push.subscribeToTopic('nearpace_updates');
+        } else {
+          push.unsubscribeFromTopic('nearpace_updates');
+        }
       });
     }
   }
@@ -332,6 +346,33 @@ class NearPaceController extends ChangeNotifier {
 
   double get totalDistanceMeters =>
       _activities.fold(0.0, (sum, a) => sum + a.distanceM);
+
+  double get longestRunMeters {
+    if (_activities.isEmpty) return 0.0;
+    var best = 0.0;
+    for (final activity in _activities) {
+      if (activity.distanceM > best) {
+        best = activity.distanceM;
+      }
+    }
+    return best;
+  }
+
+  double? get bestPaceSecPerKm {
+    double? best;
+    for (final activity in _activities) {
+      final pace = activity.avgPaceSecPerKm;
+      if (pace != null && pace > 0 && !pace.isNaN && !pace.isInfinite) {
+        if (best == null || pace < best) {
+          best = pace;
+        }
+      }
+    }
+    return best;
+  }
+
+  Duration get totalDuration =>
+      Duration(seconds: _activities.fold(0, (sum, a) => sum + a.durationS));
 
   // --- Derived Leaderboard ---
 
@@ -540,6 +581,8 @@ class NearPaceController extends ChangeNotifier {
     _selectedTabIndex = 0;
 
     _unsubscribeUserData();
+    _lastSyncedReminder = null;
+    await reminderService?.cancelAll();
 
     final authRepo = authRepository;
     if (!_isLocalPreview && authRepo != null) {
@@ -631,6 +674,60 @@ class NearPaceController extends ChangeNotifier {
     } catch (_) {
       // Leaderboard sync failure should not block run save
     }
+  }
+
+  // --- Notification Preferences & Run Reminders ---
+
+  Future<void> updateRunReminder(RunReminder reminder) async {
+    if (_profile.runReminder == reminder) return;
+    _profile = _profile.copyWith(runReminder: reminder);
+    _lastSyncedReminder = reminder;
+    notifyListeners();
+
+    await reminderService?.syncSchedule(reminder);
+
+    final profRepo = profileRepository;
+    if (!_isLocalPreview && profRepo != null && _profile.uid.isNotEmpty) {
+      await profRepo.updateNotificationPreferences(
+        _profile.uid,
+        runReminder: reminder,
+      );
+    }
+  }
+
+  Future<void> setReceiveUpdates(bool enabled) async {
+    if (_profile.receiveUpdates == enabled) return;
+    _profile = _profile.copyWith(receiveUpdates: enabled);
+    notifyListeners();
+
+    final push = pushService;
+    if (push != null) {
+      if (enabled) {
+        await push.subscribeToTopic('nearpace_updates');
+      } else {
+        await push.unsubscribeFromTopic('nearpace_updates');
+      }
+    }
+
+    final profRepo = profileRepository;
+    if (!_isLocalPreview && profRepo != null && _profile.uid.isNotEmpty) {
+      await profRepo.updateNotificationPreferences(
+        _profile.uid,
+        receiveUpdates: enabled,
+      );
+    }
+  }
+
+  Future<void> sendTestReminder() async {
+    final service = reminderService;
+    if (_isLocalPreview || service == null) {
+      triggerPreviewNotification(
+        title: RunReminder.notificationTitle,
+        body: RunReminder.testReminderBody,
+      );
+      return;
+    }
+    await service.sendTestReminder();
   }
 
   // --- Foreground Notification Banner Preview (FCM MVP UI) ---

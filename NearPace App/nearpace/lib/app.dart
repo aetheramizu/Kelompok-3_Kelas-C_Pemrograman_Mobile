@@ -11,6 +11,7 @@ import 'data/repositories/profile_repository.dart';
 import 'data/repositories/weather_repository.dart';
 import 'services/location_tracking_service.dart';
 import 'services/push_notification_service.dart';
+import 'services/run_reminder_service.dart';
 import 'state/nearpace_controller.dart';
 import 'theme/nearpace_spacing.dart';
 import 'theme/nearpace_theme.dart';
@@ -32,6 +33,7 @@ class NearPaceApp extends StatelessWidget {
     this.weatherRepository,
     this.locationService,
     this.pushService,
+    this.reminderService,
   }) : firebaseStatus =
            firebaseStatus ?? FirebaseUnconfigured(FirebaseConfig.missingKeys);
 
@@ -46,6 +48,7 @@ class NearPaceApp extends StatelessWidget {
   final WeatherRepository? weatherRepository;
   final LocationTrackingService? locationService;
   final PushNotificationService? pushService;
+  final RunReminderService? reminderService;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +90,9 @@ class NearPaceApp extends StatelessWidget {
             (isReady
                 ? FcmPushNotificationService()
                 : NoopPushNotificationService()),
+        reminderService:
+            reminderService ??
+            (isReady ? LocalRunReminderService() : NoopRunReminderService()),
       ),
       child: const _NearPaceMaterialApp(),
     );

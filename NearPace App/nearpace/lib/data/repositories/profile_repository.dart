@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../domain/run_reminder.dart';
 import '../../domain/user_profile.dart';
 
 /// Contract for runner profile storage at `users/{uid}`.
@@ -16,6 +17,11 @@ abstract interface class ProfileRepository {
   });
   Future<void> setShowOnLeaderboard(String uid, bool show);
   Future<void> updateFcmToken(String uid, String? token);
+  Future<void> updateNotificationPreferences(
+    String uid, {
+    RunReminder? runReminder,
+    bool? receiveUpdates,
+  });
 }
 
 /// Cloud Firestore implementation of [ProfileRepository].
@@ -87,6 +93,24 @@ class FirestoreProfileRepository implements ProfileRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
+  @override
+  Future<void> updateNotificationPreferences(
+    String uid, {
+    RunReminder? runReminder,
+    bool? receiveUpdates,
+  }) async {
+    final payload = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (runReminder != null) {
+      payload['runReminder'] = runReminder.toMap();
+    }
+    if (receiveUpdates != null) {
+      payload['receiveUpdates'] = receiveUpdates;
+    }
+    await _userDoc(uid).set(payload, SetOptions(merge: true));
+  }
 }
 
 /// In-memory mock implementation of [ProfileRepository] for tests and local preview.
@@ -145,6 +169,21 @@ class MockProfileRepository implements ProfileRepository {
   Future<void> updateFcmToken(String uid, String? token) async {
     if (_profile != null) {
       _profile = _profile!.copyWith(fcmToken: token);
+      _controller.add(_profile);
+    }
+  }
+
+  @override
+  Future<void> updateNotificationPreferences(
+    String uid, {
+    RunReminder? runReminder,
+    bool? receiveUpdates,
+  }) async {
+    if (_profile != null) {
+      _profile = _profile!.copyWith(
+        runReminder: runReminder,
+        receiveUpdates: receiveUpdates,
+      );
       _controller.add(_profile);
     }
   }
