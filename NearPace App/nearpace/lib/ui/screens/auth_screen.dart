@@ -472,28 +472,18 @@ class _NearPaceMarkPainter extends CustomPainter {
       ..lineTo(84, 52)
       ..lineTo(172, 140)
       ..lineTo(172, 124)
-      ..arcToPoint(
-        const Offset(212, 124),
-        radius: const Radius.circular(20),
-      )
+      ..arcToPoint(const Offset(212, 124), radius: const Radius.circular(20))
       ..lineTo(212, 188)
       ..lineTo(196, 204)
       ..lineTo(172, 204)
       ..lineTo(84, 116)
       ..lineTo(84, 188)
-      ..arcToPoint(
-        const Offset(44, 188),
-        radius: const Radius.circular(20),
-      )
+      ..arcToPoint(const Offset(44, 188), radius: const Radius.circular(20))
       ..close()
       ..addOval(Rect.fromCircle(center: const Offset(64, 188), radius: 8));
 
     canvas.drawPath(routePath, Paint()..color = strokeColor);
-    canvas.drawCircle(
-      const Offset(192, 68),
-      20,
-      Paint()..color = dotColor,
-    );
+    canvas.drawCircle(const Offset(192, 68), 20, Paint()..color = dotColor);
     canvas.restore();
   }
 
