@@ -90,6 +90,8 @@ class FirebaseAuthRepository implements AuthRepository {
         return 'Password is too weak. Please use at least 6 characters.';
       case 'network-request-failed':
         return 'Network connection error. Check your internet connection and try again.';
+      case 'operation-not-allowed':
+        return 'Email/Password sign-in is disabled in Firebase Console. Please enable it in Authentication > Sign-in method.';
       case 'too-many-requests':
         return 'Too many unsuccessful attempts. Please try again later.';
       case 'user-disabled':

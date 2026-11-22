@@ -41,6 +41,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _switchMode(_AuthMode mode) {
     if (_mode == mode) return;
+    _formKey.currentState?.reset();
     setState(() {
       _mode = mode;
       _formErrorSummary = null;
@@ -229,7 +230,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                     ),
                                     ButtonSegment(
                                       value: _AuthMode.signUp,
-                                      label: Text('Create account'),
+                                      label: Text('Sign up'),
                                     ),
                                   ],
                                   selected: {_mode},
@@ -277,8 +278,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [AutofillHints.name],
                                     maxLength: 40,
+                                    onFieldSubmitted: (_) =>
+                                        _submit(controller),
                                     decoration: const InputDecoration(
-                                      labelText: 'Display name',
+                                      labelText: 'Display name (optional)',
                                       hintText: 'e.g. Alief Pratama',
                                       counterText: '',
                                     ),
@@ -287,10 +290,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                         return null;
                                       }
                                       final trimmed = value?.trim() ?? '';
-                                      if (trimmed.isEmpty) {
-                                        return 'Enter a display name.';
-                                      }
-                                      if (trimmed.length < 2) {
+                                      if (trimmed.isNotEmpty &&
+                                          trimmed.length < 2) {
                                         return 'Use at least 2 characters.';
                                       }
                                       return null;
@@ -301,6 +302,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                     controller: _cityController,
                                     textInputAction: TextInputAction.next,
                                     maxLength: 60,
+                                    onFieldSubmitted: (_) =>
+                                        _submit(controller),
                                     decoration: const InputDecoration(
                                       labelText: 'City (optional)',
                                       hintText:
@@ -316,6 +319,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   autofillHints: const [AutofillHints.email],
+                                  onFieldSubmitted: (_) => _submit(controller),
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
                                     hintText: 'runner@example.com',
@@ -391,9 +395,28 @@ class _AuthScreenState extends State<AuthScreen> {
                                                     ? 'Sign in (preview)'
                                                     : 'Sign in')
                                               : (controller.isLocalPreview
-                                                    ? 'Create profile (preview)'
-                                                    : 'Create profile'),
+                                                    ? 'Sign up (preview)'
+                                                    : 'Sign up'),
                                         ),
+                                ),
+                                const SizedBox(height: NearPaceSpacing.xs),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: () => _switchMode(
+                                      _mode == _AuthMode.signIn
+                                          ? _AuthMode.signUp
+                                          : _AuthMode.signIn,
+                                    ),
+                                    child: Text(
+                                      _mode == _AuthMode.signIn
+                                          ? "Don't have an account? Sign up"
+                                          : 'Already have an account? Sign in',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colors.accent,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
