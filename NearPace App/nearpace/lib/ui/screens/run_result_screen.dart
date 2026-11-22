@@ -9,12 +9,11 @@ import '../../utils/formatters.dart';
 import '../widgets/metric_tile.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/route_sketch.dart';
-import '../widgets/state_views.dart';
 import '../widgets/weather_badge.dart';
 
 /// Displays a completed or saved run with metrics, route sketch, and start-point
 /// weather summary.
-class RunResultScreen extends StatelessWidget {
+class RunResultScreen extends StatefulWidget {
   const RunResultScreen({
     super.key,
     required this.activity,
@@ -24,7 +23,15 @@ class RunResultScreen extends StatelessWidget {
   final Activity activity;
   final bool isUnsaved;
 
-  Future<void> _confirmDiscard(BuildContext context) async {
+  @override
+  State<RunResultScreen> createState() => _RunResultScreenState();
+}
+
+class _RunResultScreenState extends State<RunResultScreen> {
+  bool _isSaving = false;
+  bool _isDeleting = false;
+
+  Future<void> _confirmDiscard() async {
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -49,19 +56,19 @@ class RunResultScreen extends StatelessWidget {
         ],
       ),
     );
-    if (discard == true && context.mounted) {
+    if (discard == true && mounted) {
       Navigator.of(context).pop(false);
     }
   }
 
-  Future<void> _confirmDeleteSaved(BuildContext context) async {
+  Future<void> _confirmDeleteSaved() async {
     final delete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove run from history?'),
         content: const Text(
-          'This removes the run from your local preview history and updates '
-          'this week\'s totals.',
+          'This removes the run from your history and updates this week\'s '
+          'totals.',
         ),
         actions: [
           TextButton(
@@ -79,34 +86,70 @@ class RunResultScreen extends StatelessWidget {
         ],
       ),
     );
-    if (delete == true && context.mounted) {
-      context.read<NearPaceController>().deleteActivity(activity.id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Run removed from preview history.')),
-      );
-      Navigator.of(context).pop();
+    if (delete == true && mounted) {
+      final controller = context.read<NearPaceController>();
+      final messenger = ScaffoldMessenger.of(context);
+      final nav = Navigator.of(context);
+      setState(() => _isDeleting = true);
+      try {
+        await controller.deleteActivity(widget.activity.id);
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              controller.isLocalPreview
+                  ? 'Run removed from preview history.'
+                  : 'Run removed from history.',
+            ),
+          ),
+        );
+        nav.pop();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isDeleting = false);
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to delete run: $e')),
+        );
+      }
     }
   }
 
-  void _saveRun(BuildContext context) {
+  Future<void> _saveRun() async {
     final controller = context.read<NearPaceController>();
-    controller.saveActivity(activity);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          controller.isLocalPreview
-              ? 'Run saved to local preview history.'
-              : 'Run saved to your history.',
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    setState(() => _isSaving = true);
+    try {
+      await controller.saveActivity(widget.activity);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            controller.isLocalPreview
+                ? 'Run saved to local preview history.'
+                : 'Run saved to your history.',
+          ),
         ),
-      ),
-    );
-    Navigator.of(context).pop(true);
+      );
+      nav.pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to save run: $e'),
+          action: SnackBarAction(label: 'Retry', onPressed: _saveRun),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.npColors;
     final textTheme = Theme.of(context).textTheme;
+    final isUnsaved = widget.isUnsaved;
+    final activity = widget.activity;
     final title = NearPaceFormatters.runSessionTitle(activity.startedAt);
     final timestamp = NearPaceFormatters.activityTimestamp(activity.startedAt);
     final endedHh = activity.endedAt.toLocal().hour.toString().padLeft(2, '0');
@@ -119,7 +162,7 @@ class RunResultScreen extends StatelessWidget {
       canPop: !isUnsaved,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && isUnsaved) {
-          _confirmDiscard(context);
+          _confirmDiscard();
         }
       },
       child: Scaffold(
@@ -129,7 +172,7 @@ class RunResultScreen extends StatelessWidget {
             tooltip: isUnsaved ? 'Discard run' : 'Back',
             onPressed: () {
               if (isUnsaved) {
-                _confirmDiscard(context);
+                _confirmDiscard();
               } else {
                 Navigator.of(context).pop();
               }
@@ -142,245 +185,238 @@ class RunResultScreen extends StatelessWidget {
             if (!isUnsaved)
               IconButton(
                 tooltip: 'Remove run',
-                onPressed: () => _confirmDeleteSaved(context),
-                icon: Icon(
-                  Icons.delete_outline_rounded,
-                  color: colors.textSecondary,
-                ),
+                onPressed: _isDeleting ? null : _confirmDeleteSaved,
+                icon: _isDeleting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.delete_outline_rounded, color: colors.danger),
               ),
           ],
         ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final gutter = NearPaceSpacing.pageGutter(constraints.maxWidth);
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: NearPaceSpacing.maxContentWidth,
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(
-                          gutter,
-                          NearPaceSpacing.sm,
-                          gutter,
-                          NearPaceSpacing.xl,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Hero Route Sketch with header metadata.
-                            Stack(
-                              children: [
-                                RouteSketch(
-                                  route: activity.route,
-                                  height: 220,
-                                  emptyMessage:
-                                      'Route too short to sketch (fewer than '
-                                      '2 GPS points recorded)',
-                                ),
-                                Positioned(
-                                  left: NearPaceSpacing.sm,
-                                  top: NearPaceSpacing.sm,
-                                  child: StatusPill(
-                                    label: activity.hasRoute
-                                        ? '${activity.route.length} GPS points'
-                                        : 'No GPS trace',
-                                    icon: Icons.route_rounded,
-                                    backgroundColor: colors.surface.withValues(
-                                      alpha: 0.9,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: NearPaceSpacing.lg),
-
-                            // Title + Hero Distance.
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(title, style: textTheme.titleLarge),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '$timestamp – $endedHh:$endedMm',
-                                        style: textTheme.bodyMedium,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (isUnsaved)
-                                  StatusPill(
-                                    label: 'Unsaved',
-                                    foregroundColor: colors.warning,
-                                    backgroundColor: colors.warningSurface,
-                                    borderColor: colors.warning.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: NearPaceSpacing.lg),
-
-                            // Primary Metrics Grid (scales cleanly at large font sizes).
-                            IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    child: NearPaceCard(
-                                      padding: const EdgeInsets.all(
-                                        NearPaceSpacing.md,
-                                      ),
-                                      child: MetricTile(
-                                        label: 'Distance',
-                                        value:
-                                            NearPaceFormatters.distanceKmValue(
-                                              activity.distanceM,
-                                            ),
-                                        unit: 'km',
-                                        icon: Icons.straighten_rounded,
-                                        highlight: true,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: NearPaceSpacing.sm),
-                                  Expanded(
-                                    child: NearPaceCard(
-                                      padding: const EdgeInsets.all(
-                                        NearPaceSpacing.md,
-                                      ),
-                                      child: MetricTile(
-                                        label: 'Duration',
-                                        value: NearPaceFormatters.durationClock(
-                                          activity.duration,
-                                        ),
-                                        icon: Icons.timer_outlined,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: NearPaceSpacing.sm),
-                            IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    child: NearPaceCard(
-                                      padding: const EdgeInsets.all(
-                                        NearPaceSpacing.md,
-                                      ),
-                                      child: MetricTile(
-                                        label: 'Avg pace',
-                                        value: NearPaceFormatters.paceValue(
-                                          activity.avgPaceSecPerKm,
-                                        ),
-                                        unit: '/km',
-                                        icon: Icons.speed_rounded,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: NearPaceSpacing.sm),
-                                  Expanded(
-                                    child: NearPaceCard(
-                                      padding: const EdgeInsets.all(
-                                        NearPaceSpacing.md,
-                                      ),
-                                      child: MetricTile(
-                                        label: 'GPS points',
-                                        value: '${activity.route.length}',
-                                        unit: 'pts',
-                                        icon: Icons.gps_fixed_rounded,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            if (activity.avgPaceSecPerKm == null) ...[
-                              const SizedBox(height: NearPaceSpacing.sm),
-                              Text(
-                                'Average pace requires at least 50 m of '
-                                'recorded distance.',
-                                style: textTheme.bodySmall,
-                              ),
-                            ],
-
-                            const SizedBox(height: NearPaceSpacing.lg),
-                            Text(
-                              'Start-point weather',
-                              style: textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: NearPaceSpacing.xs),
-                            WeatherSummaryCard(weather: activity.weather),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (isUnsaved)
-                      SafeArea(
-                        top: false,
-                        child: Container(
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final gutter = NearPaceSpacing.pageGutter(constraints.maxWidth);
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: NearPaceSpacing.maxContentWidth,
+                  ),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
                           padding: EdgeInsets.fromLTRB(
                             gutter,
                             NearPaceSpacing.sm,
                             gutter,
-                            NearPaceSpacing.md,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colors.surface,
-                            border: Border(
-                              top: BorderSide(color: colors.border),
-                            ),
+                            NearPaceSpacing.xl,
                           ),
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Saved locally in preview mode. Cloud sync '
-                                'activates once Firebase is configured.',
-                                textAlign: TextAlign.center,
-                                style: textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: NearPaceSpacing.sm),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: () => _saveRun(context),
-                                  icon: const Icon(Icons.check_rounded),
-                                  label: const Text('Save run'),
+                                title,
+                                style: textTheme.headlineSmall?.copyWith(
+                                  letterSpacing: -0.4,
                                 ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$timestamp • ended $endedHh:$endedMm',
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.md),
+
+                              Semantics(
+                                label: 'Map of recorded run route',
+                                child: NearPaceCard(
+                                  padding: const EdgeInsets.all(
+                                    NearPaceSpacing.sm,
+                                  ),
+                                  child: RouteSketch(
+                                    route: activity.route,
+                                    height: 200,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: NearPaceSpacing.md),
+
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: NearPaceCard(
+                                        padding: const EdgeInsets.all(
+                                          NearPaceSpacing.md,
+                                        ),
+                                        child: MetricTile(
+                                          label: 'Distance',
+                                          value:
+                                              NearPaceFormatters.distanceKmValue(
+                                                activity.distanceM,
+                                              ),
+                                          unit: 'km',
+                                          icon: Icons.straighten_rounded,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: NearPaceSpacing.sm),
+                                    Expanded(
+                                      child: NearPaceCard(
+                                        padding: const EdgeInsets.all(
+                                          NearPaceSpacing.md,
+                                        ),
+                                        child: MetricTile(
+                                          label: 'Duration',
+                                          value:
+                                              NearPaceFormatters.durationClock(
+                                                activity.duration,
+                                              ),
+                                          icon: Icons.timer_outlined,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: NearPaceSpacing.sm),
+
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: NearPaceCard(
+                                        padding: const EdgeInsets.all(
+                                          NearPaceSpacing.md,
+                                        ),
+                                        child: MetricTile(
+                                          label: 'Avg pace',
+                                          value: NearPaceFormatters.paceValue(
+                                            activity.avgPaceSecPerKm,
+                                          ),
+                                          unit: '/km',
+                                          icon: Icons.speed_rounded,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: NearPaceSpacing.sm),
+                                    Expanded(
+                                      child: NearPaceCard(
+                                        padding: const EdgeInsets.all(
+                                          NearPaceSpacing.md,
+                                        ),
+                                        child: MetricTile(
+                                          label: 'GPS points',
+                                          value: '${activity.route.length}',
+                                          unit: 'pts',
+                                          icon: Icons.gps_fixed_rounded,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              if (activity.avgPaceSecPerKm == null) ...[
+                                const SizedBox(height: NearPaceSpacing.sm),
+                                Text(
+                                  'Average pace requires at least 50 m of '
+                                  'recorded distance.',
+                                  style: textTheme.bodySmall,
+                                ),
+                              ],
+
+                              const SizedBox(height: NearPaceSpacing.lg),
+                              Text(
+                                'Start-point weather',
+                                style: textTheme.titleMedium,
                               ),
                               const SizedBox(height: NearPaceSpacing.xs),
-                              SizedBox(
-                                width: double.infinity,
-                                child: TextButton(
-                                  onPressed: () => _confirmDiscard(context),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: colors.danger,
-                                  ),
-                                  child: const Text('Discard run'),
-                                ),
-                              ),
+                              WeatherSummaryCard(weather: activity.weather),
                             ],
                           ),
                         ),
                       ),
-                  ],
+                      if (isUnsaved)
+                        SafeArea(
+                          top: false,
+                          child: Container(
+                            padding: EdgeInsets.fromLTRB(
+                              gutter,
+                              NearPaceSpacing.sm,
+                              gutter,
+                              NearPaceSpacing.md,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.surface,
+                              border: Border(
+                                top: BorderSide(color: colors.border),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Saved locally in preview mode. Cloud sync '
+                                  'activates once Firebase is configured.',
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodySmall,
+                                ),
+                                const SizedBox(height: NearPaceSpacing.sm),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: _isSaving ? null : _saveRun,
+                                    icon: _isSaving
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(Icons.check_rounded),
+                                    label: Text(
+                                      _isSaving ? 'Saving run...' : 'Save run',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: NearPaceSpacing.xs),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: TextButton(
+                                    onPressed: _isSaving
+                                        ? null
+                                        : _confirmDiscard,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: colors.danger,
+                                    ),
+                                    child: const Text('Discard run'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

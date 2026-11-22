@@ -30,12 +30,27 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
     if (result == null || !context.mounted) return;
-    controller.updateProfile(displayName: result.name, city: result.city);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile updated for this preview session.'),
-      ),
-    );
+    try {
+      await controller.updateProfile(
+        displayName: result.name,
+        city: result.city,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            controller.isLocalPreview
+                ? 'Profile updated for this preview session.'
+                : 'Profile updated successfully.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
+    }
   }
 
   Future<void> _confirmSignOut(
@@ -253,7 +268,20 @@ class ProfileScreen extends StatelessWidget {
                             ),
                           ),
                           value: profile.showOnLeaderboard,
-                          onChanged: controller.setShowOnLeaderboard,
+                          onChanged: (value) async {
+                            try {
+                              await controller.setShowOnLeaderboard(value);
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to update leaderboard settings: $e',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(height: NearPaceSpacing.lg),
@@ -341,22 +369,43 @@ class ProfileScreen extends StatelessWidget {
                                 color: colors.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: NearPaceSpacing.sm),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                controller.triggerPreviewNotification(
-                                  title: 'NearPace update',
-                                  body:
-                                      'Weekly leaderboard resets Monday at '
-                                      '00:00 local time.',
-                                );
-                              },
-                              icon: const Icon(
-                                Icons.campaign_outlined,
-                                size: 18,
+                            if (controller.isLocalPreview) ...[
+                              const SizedBox(height: NearPaceSpacing.sm),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  controller.triggerPreviewNotification(
+                                    title: 'NearPace update',
+                                    body:
+                                        'Weekly leaderboard resets Monday at '
+                                        '00:00 local time.',
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.campaign_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('Preview foreground banner'),
                               ),
-                              label: const Text('Preview foreground banner'),
-                            ),
+                            ] else ...[
+                              const SizedBox(height: NearPaceSpacing.xs),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 16,
+                                    color: colors.performanceGreen,
+                                  ),
+                                  const SizedBox(width: NearPaceSpacing.xxs),
+                                  Text(
+                                    'Live FCM notifications active',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colors.performanceGreen,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),

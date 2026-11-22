@@ -47,7 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
-  void _submit(NearPaceController controller) {
+  Future<void> _submit(NearPaceController controller) async {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) {
       setState(() {
@@ -57,14 +57,26 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     setState(() => _formErrorSummary = null);
-    if (_mode == _AuthMode.signIn) {
-      controller.signInLocalPreview(email: _emailController.text);
-    } else {
-      controller.signUpLocalPreview(
-        email: _emailController.text,
-        displayName: _nameController.text,
-        city: _cityController.text,
-      );
+    try {
+      if (_mode == _AuthMode.signIn) {
+        await controller.signIn(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+      } else {
+        await controller.signUp(
+          email: _emailController.text,
+          password: _passwordController.text,
+          displayName: _nameController.text,
+          city: _cityController.text,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _formErrorSummary = controller.authError ?? e.toString();
+        });
+      }
     }
   }
 
@@ -361,12 +373,27 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                                 const SizedBox(height: NearPaceSpacing.lg),
                                 FilledButton(
-                                  onPressed: () => _submit(controller),
-                                  child: Text(
-                                    _mode == _AuthMode.signIn
-                                        ? 'Sign in (preview)'
-                                        : 'Create profile (preview)',
-                                  ),
+                                  onPressed: controller.isAuthBusy
+                                      ? null
+                                      : () => _submit(controller),
+                                  child: controller.isAuthBusy
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _mode == _AuthMode.signIn
+                                              ? (controller.isLocalPreview
+                                                    ? 'Sign in (preview)'
+                                                    : 'Sign in')
+                                              : (controller.isLocalPreview
+                                                    ? 'Create profile (preview)'
+                                                    : 'Create profile'),
+                                        ),
                                 ),
                               ],
                             ),

@@ -29,6 +29,7 @@ class _RecordRunScreenState extends State<RecordRunScreen> {
       final result = await showLocationPermissionSheet(
         context,
         currentStatus: controller.locationPermission,
+        isLocalPreview: controller.isLocalPreview,
       );
       if (!mounted || result == null) return;
       controller.setLocationPermission(result);
@@ -41,6 +42,7 @@ class _RecordRunScreenState extends State<RecordRunScreen> {
     final result = await showLocationPermissionSheet(
       context,
       currentStatus: controller.locationPermission,
+      isLocalPreview: controller.isLocalPreview,
     );
     if (!mounted || result == null) return;
     controller.setLocationPermission(result);
@@ -192,6 +194,7 @@ class _RecordRunScreenState extends State<RecordRunScreen> {
                                   _openPermissionSheet(controller),
                             ),
                             RunPreparing() => _PreparingBody(
+                              isLocalPreview: controller.isLocalPreview,
                               onSimulateLoss: controller.simulateGpsSignalLost,
                             ),
                             RunActive(:final paused) => _ActiveBody(
@@ -367,85 +370,91 @@ class _IdleBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NearPaceSpacing.md),
-        NearPaceCard(
-          elevated: true,
-          padding: const EdgeInsets.all(NearPaceSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.tune_rounded,
-                    size: 16,
+        if (controller.isLocalPreview) ...[
+          NearPaceCard(
+            elevated: true,
+            padding: const EdgeInsets.all(NearPaceSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 16,
+                      color: colors.textSecondary,
+                    ),
+                    const SizedBox(width: NearPaceSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        'Preview session options',
+                        style: textTheme.titleSmall,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: NearPaceSpacing.xs),
+                Text(
+                  'Local preview options for testing GPS tracking and offline '
+                  'weather states.',
+                  style: textTheme.bodySmall?.copyWith(
                     color: colors.textSecondary,
                   ),
-                  const SizedBox(width: NearPaceSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      'Preview session options',
-                      style: textTheme.titleSmall,
+                ),
+                const SizedBox(height: NearPaceSpacing.xs),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Simulate GPS route points',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colors.textPrimary,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: NearPaceSpacing.xs),
-              Text(
-                'Local preview options for testing GPS tracking and offline '
-                'weather states.',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: NearPaceSpacing.xs),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Simulate GPS route points',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.textPrimary,
+                  subtitle: Text(
+                    'Feeds realistic coordinates into RunSession every 3 seconds',
+                    style: textTheme.bodySmall,
                   ),
+                  value: controller.simulateGpsInPreview,
+                  onChanged: controller.setSimulateGpsInPreview,
                 ),
-                subtitle: Text(
-                  'Feeds realistic coordinates into RunSession every 3 seconds',
-                  style: textTheme.bodySmall,
-                ),
-                value: controller.simulateGpsInPreview,
-                onChanged: controller.setSimulateGpsInPreview,
-              ),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Include Open-Meteo weather snapshot',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.textPrimary,
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Include Open-Meteo weather snapshot',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colors.textPrimary,
+                    ),
                   ),
+                  subtitle: Text(
+                    'Turn off to preview the offline weather fallback on summary',
+                    style: textTheme.bodySmall,
+                  ),
+                  value: controller.weatherAvailableInPreview,
+                  onChanged: controller.setWeatherAvailableInPreview,
                 ),
-                subtitle: Text(
-                  'Turn off to preview the offline weather fallback on summary',
-                  style: textTheme.bodySmall,
+                const SizedBox(height: NearPaceSpacing.xs),
+                OutlinedButton.icon(
+                  onPressed: onRequestPermission,
+                  icon: const Icon(Icons.my_location_rounded, size: 18),
+                  label: const Text('Review location permission'),
                 ),
-                value: controller.weatherAvailableInPreview,
-                onChanged: controller.setWeatherAvailableInPreview,
-              ),
-              const SizedBox(height: NearPaceSpacing.xs),
-              OutlinedButton.icon(
-                onPressed: onRequestPermission,
-                icon: const Icon(Icons.my_location_rounded, size: 18),
-                label: const Text('Review location permission'),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 }
 
 class _PreparingBody extends StatelessWidget {
-  const _PreparingBody({required this.onSimulateLoss});
+  const _PreparingBody({
+    required this.onSimulateLoss,
+    this.isLocalPreview = true,
+  });
 
   final VoidCallback onSimulateLoss;
+  final bool isLocalPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -480,11 +489,13 @@ class _PreparingBody extends StatelessWidget {
             style: textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: NearPaceSpacing.lg),
-          TextButton(
-            onPressed: onSimulateLoss,
-            child: const Text('Simulate GPS failure'),
-          ),
+          if (isLocalPreview) ...[
+            const SizedBox(height: NearPaceSpacing.lg),
+            TextButton(
+              onPressed: onSimulateLoss,
+              child: const Text('Simulate GPS failure'),
+            ),
+          ],
         ],
       ),
     );

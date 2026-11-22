@@ -19,7 +19,8 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
 
       match /activities/{activityId} {
-        allow read, write: if isOwner(uid)
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
           && (!request.resource.data.keys().hasAny(['distanceM', 'durationS'])
               || (request.resource.data.distanceM is number
                   && request.resource.data.distanceM >= 0
