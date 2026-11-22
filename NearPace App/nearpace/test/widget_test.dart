@@ -34,7 +34,7 @@ void main() {
       expect(find.textContaining('FIREBASE_API_KEY'), findsOneWidget);
     });
 
-    testWidgets('shows ready state when Firebase is initialized', (
+    testWidgets('hides Firebase status banner when Firebase is initialized', (
       tester,
     ) async {
       usePhoneViewport(tester);
@@ -45,7 +45,8 @@ void main() {
         ),
       );
 
-      expect(find.text('Firebase ready'), findsOneWidget);
+      expect(find.text('NearPace'), findsOneWidget);
+      expect(find.text('Firebase ready'), findsNothing);
     });
 
     testWidgets('shows failure state when Firebase initialization fails', (
@@ -83,6 +84,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Ready, Alief?'), findsOneWidget);
+      expect(find.text('Set a run reminder'), findsOneWidget);
+      expect(find.text('Firebase ready'), findsNothing);
+      expect(find.text('Local preview'), findsNothing);
       expect(find.text('THIS WEEK'), findsOneWidget);
 
       await tester.scrollUntilVisible(
@@ -120,10 +124,10 @@ void main() {
       await tester.tap(find.text('Ranks'));
       await tester.pumpAndSettle();
       expect(find.text('Leaderboard'), findsOneWidget);
-      expect(find.text('Your profile is private'), findsOneWidget);
+      expect(find.text('Join this week\'s leaderboard'), findsOneWidget);
 
-      // Opt in to leaderboard directly from prompt
-      await tester.tap(find.text('Opt in'));
+      // Join leaderboard directly from prompt
+      await tester.tap(find.text('Join'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('You'),
@@ -152,28 +156,49 @@ void main() {
       // Ranks -> Profile
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
-      expect(find.text('Show on weekly leaderboard'), findsOneWidget);
+      expect(find.text('Personal bests'), findsOneWidget);
+      expect(find.text('Connection status'), findsNothing);
+      expect(find.text('Topic: nearpace_updates'), findsNothing);
 
-      // Preview foreground notification banner and dismiss it
+      final profileScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('profile-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+
+      // Enable run reminders and send a test reminder
       await tester.scrollUntilVisible(
-        find.text('Preview foreground banner'),
+        find.text('Run reminders'),
         200,
-        scrollable: find
-            .descendant(
-              of: find.byKey(const ValueKey('profile-scroll')),
-              matching: find.byType(Scrollable),
-            )
-            .first,
+        scrollable: profileScrollable,
       );
-      await tester.ensureVisible(find.text('Preview foreground banner'));
+      await tester.tap(find.text('Run reminders'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Preview foreground banner'));
+      expect(find.text('Repeat days'), findsOneWidget);
+      expect(find.text('Reminder time'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('Send test reminder'),
+        200,
+        scrollable: profileScrollable,
+      );
+      await tester.ensureVisible(find.text('Send test reminder'));
       await tester.pumpAndSettle();
-      expect(find.text('NearPace update'), findsOneWidget);
+      await tester.tap(find.text('Send test reminder'));
+      await tester.pumpAndSettle();
+      expect(find.text('Huss, Huss, Huss! Time to run 🏃'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Dismiss notification'));
       await tester.pumpAndSettle();
-      expect(find.text('NearPace update'), findsNothing);
+      expect(find.text('Huss, Huss, Huss! Time to run 🏃'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.text('Show on weekly leaderboard'),
+        200,
+        scrollable: profileScrollable,
+      );
+      expect(find.text('Show on weekly leaderboard'), findsOneWidget);
     });
   });
 
@@ -338,6 +363,8 @@ void main() {
             )
             .first,
       );
+      await tester.ensureVisible(find.text('Light'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Light'));
       await tester.pumpAndSettle();
 

@@ -1,3 +1,5 @@
+import 'run_reminder.dart';
+
 /// Private user profile stored at `users/{uid}`.
 class UserProfile {
   const UserProfile({
@@ -7,6 +9,8 @@ class UserProfile {
     required this.city,
     required this.showOnLeaderboard,
     this.fcmToken,
+    this.runReminder = const RunReminder(),
+    this.receiveUpdates = true,
   });
 
   final String uid;
@@ -15,6 +19,8 @@ class UserProfile {
   final String city;
   final bool showOnLeaderboard;
   final String? fcmToken;
+  final RunReminder runReminder;
+  final bool receiveUpdates;
 
   String get initials {
     final parts = displayName.trim().split(RegExp(r'\s+'));
@@ -31,6 +37,8 @@ class UserProfile {
     String? city,
     bool? showOnLeaderboard,
     String? fcmToken,
+    RunReminder? runReminder,
+    bool? receiveUpdates,
   }) => UserProfile(
     uid: uid,
     email: email,
@@ -38,6 +46,8 @@ class UserProfile {
     city: city ?? this.city,
     showOnLeaderboard: showOnLeaderboard ?? this.showOnLeaderboard,
     fcmToken: fcmToken ?? this.fcmToken,
+    runReminder: runReminder ?? this.runReminder,
+    receiveUpdates: receiveUpdates ?? this.receiveUpdates,
   );
 
   Map<String, dynamic> toMap() => {
@@ -46,6 +56,8 @@ class UserProfile {
     'city': city,
     'showOnLeaderboard': showOnLeaderboard,
     if (fcmToken != null) 'fcmToken': fcmToken,
+    'runReminder': runReminder.toMap(),
+    'receiveUpdates': receiveUpdates,
   };
 
   static UserProfile fromMap(String uid, Map<String, dynamic> map) =>
@@ -56,5 +68,11 @@ class UserProfile {
         city: map['city'] as String? ?? '',
         showOnLeaderboard: map['showOnLeaderboard'] as bool? ?? false,
         fcmToken: map['fcmToken'] as String?,
+        runReminder: RunReminder.fromMap(
+          map['runReminder'] is Map
+              ? Map<String, dynamic>.from(map['runReminder'] as Map)
+              : null,
+        ),
+        receiveUpdates: map['receiveUpdates'] as bool? ?? true,
       );
 }

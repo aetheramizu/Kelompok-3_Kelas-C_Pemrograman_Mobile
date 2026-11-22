@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nearpace/config/firebase_bootstrap.dart';
+import 'package:nearpace/domain/run_reminder.dart';
 import 'package:nearpace/domain/run_state.dart';
+import 'package:nearpace/services/run_reminder_service.dart';
 import 'package:nearpace/state/nearpace_controller.dart';
 
 void main() {
@@ -100,6 +102,39 @@ void main() {
 
       controller.dismissNotification();
       expect(controller.activeNotice, isNull);
+    });
+
+    test('computes personal best metrics from saved activities', () {
+      expect(controller.longestRunMeters, greaterThan(0));
+      expect(controller.bestPaceSecPerKm, isNotNull);
+      expect(controller.bestPaceSecPerKm!, greaterThan(0));
+      expect(controller.totalDuration.inSeconds, greaterThan(0));
+    });
+
+    test('updates run reminder schedule and triggers test reminder', () async {
+      final noopReminders = NoopRunReminderService();
+      final wired = NearPaceController(
+        firebaseStatus: const FirebaseUnconfigured({'FIREBASE_API_KEY'}),
+        clockNow: DateTime(2026, 11, 21, 9, 0),
+        reminderService: noopReminders,
+      );
+      addTearDown(wired.dispose);
+
+      const updated = RunReminder(
+        enabled: true,
+        weekdays: {DateTime.monday, DateTime.friday},
+        hour: 6,
+        minute: 15,
+      );
+      await wired.updateRunReminder(updated);
+      expect(wired.profile.runReminder, updated);
+      expect(noopReminders.lastSyncedReminder, updated);
+
+      await wired.sendTestReminder();
+      expect(wired.activeNotice?.title, RunReminder.notificationTitle);
+
+      await wired.setReceiveUpdates(false);
+      expect(wired.profile.receiveUpdates, isFalse);
     });
   });
 }

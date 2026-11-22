@@ -114,13 +114,14 @@ class LeaderboardScreen extends StatelessWidget {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Your profile is private',
+                                        'Join this week\'s leaderboard',
                                         style: textTheme.titleSmall,
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Opt in to share only your display name, '
-                                        'city, and weekly distance.',
+                                        'Share your name, city, and weekly '
+                                        'distance to see your rank. Your routes '
+                                        'stay private.',
                                         style: textTheme.bodySmall?.copyWith(
                                           color: colors.textSecondary,
                                         ),
@@ -138,7 +139,7 @@ class LeaderboardScreen extends StatelessWidget {
                                   ),
                                   onPressed: () =>
                                       controller.setShowOnLeaderboard(true),
-                                  child: const Text('Opt in'),
+                                  child: const Text('Join'),
                                 ),
                               ],
                             ),
@@ -205,14 +206,14 @@ class LeaderboardScreen extends StatelessWidget {
                                 ? 'No runners on this week\'s board'
                                 : 'No runners in $selectedCity yet',
                             message: selectedCity == null
-                                ? 'Opt in from Profile and save a run to appear '
-                                      'on the weekly leaderboard.'
-                                : 'No opted-in runners have logged distance in '
-                                      '$selectedCity this week.',
+                                ? 'Join the leaderboard and log a run to '
+                                      'appear here.'
+                                : 'No runners in $selectedCity have logged a '
+                                      'run this week yet.',
                             actionLabel: selectedCity == null
                                 ? (profile.showOnLeaderboard
                                       ? null
-                                      : 'Opt in now')
+                                      : 'Join leaderboard')
                                 : 'Show all cities',
                             onAction: selectedCity == null
                                 ? (profile.showOnLeaderboard
