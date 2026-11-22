@@ -50,7 +50,10 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
       'runCount': entry.runCount,
       'updatedAt': Timestamp.fromDate(entry.updatedAt.toUtc()),
     };
-    await _leaderboardCol.doc(docId).set(data);
+    await _leaderboardCol
+        .doc(docId)
+        .set(data)
+        .timeout(const Duration(seconds: 6));
   }
 
   @override

@@ -36,9 +36,8 @@ class HomeScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final (title, detail) = switch (status) {
       FirebaseReady() => (
-        'Firebase Core initialized',
-        'Firebase build-time options are present. Backend auth, Firestore, '
-            'and FCM integration can connect here.',
+        'Firebase connected',
+        'Connected to cloud database. Runs and leaderboards sync automatically.',
       ),
       FirebaseUnconfigured(:final missingKeys) => (
         'Local preview mode',

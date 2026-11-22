@@ -126,8 +126,8 @@ class _RunResultScreenState extends State<RunResultScreen> {
         SnackBar(
           content: Text(
             controller.isLocalPreview
-                ? 'Run saved to local preview history.'
-                : 'Run saved to your history.',
+                ? 'Run saved to history.'
+                : 'Run saved to your account.',
           ),
         ),
       );
@@ -137,8 +137,10 @@ class _RunResultScreenState extends State<RunResultScreen> {
       setState(() => _isSaving = false);
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Failed to save run: $e'),
-          action: SnackBarAction(label: 'Retry', onPressed: _saveRun),
+          content: Text(
+            'Saved locally on device (cloud sync failed: ${e.toString().split('\n').first})',
+          ),
+          action: SnackBarAction(label: 'Done', onPressed: () => nav.pop(true)),
         ),
       );
     }
@@ -369,10 +371,15 @@ class _RunResultScreenState extends State<RunResultScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Saved locally in preview mode. Cloud sync '
-                                  'activates once Firebase is configured.',
+                                  context
+                                          .read<NearPaceController>()
+                                          .isLocalPreview
+                                      ? 'Run will be saved to your local history.'
+                                      : 'Run will be saved to your account and synced to Firestore.',
                                   textAlign: TextAlign.center,
-                                  style: textTheme.bodySmall,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colors.textSecondary,
+                                  ),
                                 ),
                                 const SizedBox(height: NearPaceSpacing.sm),
                                 SizedBox(

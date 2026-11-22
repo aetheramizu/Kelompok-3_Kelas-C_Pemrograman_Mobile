@@ -48,10 +48,15 @@ class FirestoreActivityRepository implements ActivityRepository {
     // update or set with that ID; otherwise generate a new Firestore ID.
     final collection = _activitiesCol(uid);
     if (activity.id.isNotEmpty && !activity.id.startsWith('local-')) {
-      await collection.doc(activity.id).set(data);
+      await collection
+          .doc(activity.id)
+          .set(data)
+          .timeout(const Duration(seconds: 6));
       return activity.id;
     } else {
-      final docRef = await collection.add(data);
+      final docRef = await collection
+          .add(data)
+          .timeout(const Duration(seconds: 6));
       return docRef.id;
     }
   }

@@ -100,9 +100,8 @@ class ProfileScreen extends StatelessWidget {
       firebaseBg,
     ) = switch (controller.firebaseStatus) {
       FirebaseReady() => (
-        'Firebase Core ready',
-        'Build-time Firebase options were initialized. Auth, Firestore, '
-            'and FCM wiring remain ready for backend integration.',
+        'Firebase connected',
+        'Connected to Cloud Firestore, Authentication, and push notifications.',
         colors.performanceGreen,
         colors.deepGreenSurface,
       ),
@@ -362,9 +361,7 @@ class ProfileScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: NearPaceSpacing.xxs),
                             Text(
-                              'Foreground alerts render as an in-app banner. '
-                              'Console FCM delivery activates once Firebase '
-                              'push is connected.',
+                              'Foreground alerts and updates render as an in-app banner.',
                               style: textTheme.bodySmall?.copyWith(
                                 color: colors.textSecondary,
                               ),

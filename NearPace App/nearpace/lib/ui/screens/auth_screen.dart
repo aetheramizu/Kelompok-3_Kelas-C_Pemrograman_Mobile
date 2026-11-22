@@ -95,8 +95,7 @@ class _AuthScreenState extends State<AuthScreen> {
     ) = switch (controller.firebaseStatus) {
       FirebaseReady() => (
         'Firebase ready',
-        'Firebase Core is initialized. Forms currently run in local '
-            'preview until auth services are wired.',
+        'Connected to Firebase. Sign in or sign up with your account.',
         colors.performanceGreen,
         colors.deepGreenSurface,
       ),
