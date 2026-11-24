@@ -423,17 +423,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // Direct preview entry without typing credentials.
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: controller.enterQuickPreview,
-                          icon: const Icon(Icons.play_circle_outline_rounded),
-                          label: const Text('Explore UI with sample runs'),
-                        ),
-                      ),
                     ],
                   ),
                 ),

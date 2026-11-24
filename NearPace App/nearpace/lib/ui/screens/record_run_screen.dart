@@ -26,6 +26,10 @@ class RecordRunScreen extends StatefulWidget {
 class _RecordRunScreenState extends State<RecordRunScreen> {
   Future<void> _handleStartTap(NearPaceController controller) async {
     if (controller.locationPermission != LocationPermissionStatus.granted) {
+      await controller.checkLocationPermission();
+      if (!mounted) return;
+    }
+    if (controller.locationPermission != LocationPermissionStatus.granted) {
       final result = await showLocationPermissionSheet(
         context,
         currentStatus: controller.locationPermission,
@@ -193,7 +197,8 @@ class _RecordRunScreenState extends State<RecordRunScreen> {
                               onRequestPermission: () =>
                                   _openPermissionSheet(controller),
                             ),
-                            RunPreparing() => _PreparingBody(
+                            RunPreparing(:final message) => _PreparingBody(
+                              message: message,
                               isLocalPreview: controller.isLocalPreview,
                               onSimulateLoss: controller.simulateGpsSignalLost,
                             ),
@@ -202,12 +207,18 @@ class _RecordRunScreenState extends State<RecordRunScreen> {
                               paused: paused,
                             ),
                             RunStopping() => const _StoppingBody(),
-                            RunFailed(:final message) => _FailedBody(
-                              message: message,
-                              onCheckPermission: () =>
-                                  _openPermissionSheet(controller),
-                              onRetry: () => _handleStartTap(controller),
-                            ),
+                            RunFailed(:final message, :final reason) =>
+                              _FailedBody(
+                                message: message,
+                                reason: reason,
+                                onCheckPermission: () =>
+                                    _openPermissionSheet(controller),
+                                onOpenLocationSettings: () =>
+                                    controller.openLocationSettings(),
+                                onOpenAppSettings: () =>
+                                    controller.openAppSettings(),
+                                onRetry: () => _handleStartTap(controller),
+                              ),
                           },
                         ),
                       ),
@@ -275,12 +286,27 @@ class _GpsHeaderBadge extends StatelessWidget {
         colors.textSecondary,
         colors.surfaceElevated,
       ),
-      RunFailed() => (
-        'GPS blocked',
-        Icons.gps_off_rounded,
-        colors.danger,
-        colors.dangerSurface,
-      ),
+      RunFailed(:final reason) => switch (reason) {
+        RunFailureReason.serviceDisabled => (
+          'GPS off',
+          Icons.gps_off_rounded,
+          colors.danger,
+          colors.dangerSurface,
+        ),
+        RunFailureReason.permissionDenied ||
+        RunFailureReason.permissionDeniedForever => (
+          'Permission off',
+          Icons.location_off_rounded,
+          colors.danger,
+          colors.dangerSurface,
+        ),
+        RunFailureReason.unknown => (
+          'GPS issue',
+          Icons.gps_off_rounded,
+          colors.danger,
+          colors.dangerSurface,
+        ),
+      },
       RunIdle() => switch (permission) {
         LocationPermissionStatus.granted => (
           'GPS ready',
@@ -449,10 +475,13 @@ class _IdleBody extends StatelessWidget {
 
 class _PreparingBody extends StatelessWidget {
   const _PreparingBody({
+    this.message =
+        'Waiting for an accurate foreground fix before starting the timer.',
     required this.onSimulateLoss,
     this.isLocalPreview = true,
   });
 
+  final String message;
   final VoidCallback onSimulateLoss;
   final bool isLocalPreview;
 
@@ -485,7 +514,7 @@ class _PreparingBody extends StatelessWidget {
           ),
           const SizedBox(height: NearPaceSpacing.xs),
           Text(
-            'Waiting for an accurate foreground fix before starting the timer.',
+            message,
             style: textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),
@@ -631,13 +660,19 @@ class _StoppingBody extends StatelessWidget {
 class _FailedBody extends StatelessWidget {
   const _FailedBody({
     required this.message,
+    this.reason = RunFailureReason.unknown,
     required this.onCheckPermission,
     required this.onRetry,
+    this.onOpenLocationSettings,
+    this.onOpenAppSettings,
   });
 
   final String message;
+  final RunFailureReason reason;
   final VoidCallback onCheckPermission;
   final VoidCallback onRetry;
+  final VoidCallback? onOpenLocationSettings;
+  final VoidCallback? onOpenAppSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -650,14 +685,35 @@ class _FailedBody extends StatelessWidget {
           onRetry: onRetry,
         ),
         const SizedBox(height: NearPaceSpacing.md),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: onCheckPermission,
-            icon: const Icon(Icons.my_location_rounded, size: 18),
-            label: const Text('Update location permission'),
+        if (reason == RunFailureReason.serviceDisabled &&
+            onOpenLocationSettings != null)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onOpenLocationSettings,
+              icon: const Icon(Icons.location_searching_rounded, size: 18),
+              label: const Text('Open location settings'),
+            ),
+          )
+        else if (reason == RunFailureReason.permissionDeniedForever &&
+            onOpenAppSettings != null)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onOpenAppSettings,
+              icon: const Icon(Icons.settings_rounded, size: 18),
+              label: const Text('Open app settings'),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onCheckPermission,
+              icon: const Icon(Icons.my_location_rounded, size: 18),
+              label: const Text('Update location permission'),
+            ),
           ),
-        ),
       ],
     );
   }

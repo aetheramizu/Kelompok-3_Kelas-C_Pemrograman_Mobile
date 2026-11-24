@@ -16,6 +16,17 @@ class RunSample {
 class RunSession {
   RunSession({required this.startedAt});
 
+  /// Restores an in-flight session from a persisted checkpoint.
+  RunSession.restore({
+    required this.startedAt,
+    required List<RunSample> samples,
+    this._pausedTotal = Duration.zero,
+    this._pausedAt,
+    this._rejectedSamples = 0,
+  }) {
+    _samples.addAll(samples);
+  }
+
   /// Fixes with a reported accuracy worse than this are ignored.
   static const double maxAccuracyM = 35;
 
@@ -35,6 +46,8 @@ class RunSession {
   int get acceptedSamples => _samples.length;
   int get rejectedSamples => _rejectedSamples;
   bool get isPaused => _pausedAt != null;
+  DateTime? get pausedAt => _pausedAt;
+  Duration get pausedTotal => _pausedTotal;
   bool get hasEnoughData => _samples.length >= 2;
 
   /// Adds a fix and reports whether it was accepted.

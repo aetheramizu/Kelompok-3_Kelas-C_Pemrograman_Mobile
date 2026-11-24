@@ -66,7 +66,7 @@ void main() {
   });
 
   group('Auth and main shell navigation', () {
-    testWidgets('validates empty sign-in form and supports quick preview', (
+    testWidgets('validates empty sign-in form and signs in with credentials', (
       tester,
     ) async {
       usePhoneViewport(tester);
@@ -79,8 +79,12 @@ void main() {
       expect(find.text('Enter your email address.'), findsOneWidget);
       expect(find.text('Enter your password.'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Explore UI with sample runs'));
-      await tester.tap(find.text('Explore UI with sample runs'));
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        'alief@nearpace.id',
+      );
+      await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+      await tester.tap(find.text('Sign in (preview)'));
       await tester.pumpAndSettle();
 
       expect(find.text('Ready, Alief?'), findsOneWidget);

@@ -11,6 +11,7 @@ import '../data/repositories/weather_repository.dart';
 import '../domain/activity.dart';
 import '../domain/geo_point.dart';
 import '../domain/leaderboard_entry.dart';
+import '../domain/run_checkpoint.dart';
 import '../domain/run_reminder.dart';
 import '../domain/run_session.dart';
 import '../domain/run_state.dart';
@@ -18,6 +19,8 @@ import '../domain/user_profile.dart';
 import '../domain/weather.dart';
 import '../services/location_tracking_service.dart';
 import '../services/push_notification_service.dart';
+import '../services/run_checkpoint_service.dart';
+import '../services/run_foreground_service.dart';
 import '../services/run_reminder_service.dart';
 import '../utils/formatters.dart';
 import 'mock_data.dart';
@@ -54,6 +57,7 @@ class NearPaceController extends ChangeNotifier {
     DateTime? clockNow,
     bool startSignedIn = false,
     bool? isLocalPreview,
+    bool? isAuthBootstrapped,
     this.authRepository,
     this.profileRepository,
     this.activityRepository,
@@ -62,9 +66,16 @@ class NearPaceController extends ChangeNotifier {
     this.locationService,
     this.pushService,
     this.reminderService,
+    this.foregroundService,
+    this.checkpointService,
   }) : _clockAnchor = clockNow,
        _isSignedIn = startSignedIn,
        _isLocalPreview = isLocalPreview ?? (firebaseStatus is! FirebaseReady),
+       _isAuthBootstrapped =
+           isAuthBootstrapped ??
+           (startSignedIn
+               ? true
+               : (isLocalPreview ?? (firebaseStatus is! FirebaseReady))),
        _profile = NearPaceMockData.defaultProfile(),
        _activities = NearPaceMockData.initialActivities(
          clockNow ?? DateTime.now(),
@@ -72,7 +83,9 @@ class NearPaceController extends ChangeNotifier {
        _leaderboardBase = NearPaceMockData.initialLeaderboard(
          clockNow ?? DateTime.now(),
        ) {
+    _initForegroundService();
     _initSubscriptions();
+    _checkInitialLocationPermission();
   }
 
   final FirebaseBootstrapStatus firebaseStatus;
@@ -87,8 +100,11 @@ class NearPaceController extends ChangeNotifier {
   final LocationTrackingService? locationService;
   final PushNotificationService? pushService;
   final RunReminderService? reminderService;
+  final RunForegroundService? foregroundService;
+  final RunCheckpointService? checkpointService;
 
   RunReminder? _lastSyncedReminder;
+  int _tickCount = 0;
 
   DateTime get now => _clockAnchor ?? DateTime.now();
 
@@ -105,6 +121,9 @@ class NearPaceController extends ChangeNotifier {
   // --- Auth & Profile ---
   bool _isSignedIn;
   bool get isSignedIn => _isSignedIn;
+
+  bool _isAuthBootstrapped;
+  bool get isAuthBootstrapped => _isAuthBootstrapped;
 
   bool _isAuthBusy = false;
   bool get isAuthBusy => _isAuthBusy;
@@ -168,23 +187,162 @@ class NearPaceController extends ChangeNotifier {
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<GeoPointLite>? _positionSubscription;
 
+  void _initForegroundService() {
+    foregroundService?.initialize();
+    foregroundService?.setActionListener(_handleForegroundAction);
+  }
+
+  void _handleForegroundAction(String action) {
+    switch (action) {
+      case 'pause':
+        pauseRecording();
+        break;
+      case 'continue':
+        resumeRecording();
+        break;
+      case 'stop':
+        if (_runState is RunActive) {
+          pauseRecording();
+        }
+        break;
+    }
+  }
+
+  void _checkInitialLocationPermission() {
+    locationService
+        ?.checkPermission()
+        .then((status) {
+          _locationPermission = status;
+          notifyListeners();
+        })
+        .catchError((_) {});
+  }
+
+  Future<LocationPermissionStatus> checkLocationPermission() async {
+    final locService = locationService;
+    if (locService != null) {
+      final status = await locService.checkPermission();
+      _locationPermission = status;
+      notifyListeners();
+      return status;
+    }
+    return _locationPermission;
+  }
+
+  void handleAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _saveActiveCheckpoint();
+    }
+  }
+
+  void _saveActiveCheckpoint() {
+    final session = _activeSession;
+    final chkService = checkpointService;
+    if (session == null || chkService == null || _runState is! RunActive) {
+      return;
+    }
+    final checkpoint = RunCheckpoint.fromSession(
+      session,
+      isPaused: (_runState as RunActive).paused,
+    );
+    unawaited(chkService.saveCheckpoint(checkpoint));
+  }
+
+  Future<void> _restoreCheckpointIfAny() async {
+    final chkService = checkpointService;
+    if (chkService == null) return;
+    try {
+      final checkpoint = await chkService.loadCheckpoint();
+      if (checkpoint == null) return;
+      if (DateTime.now().difference(checkpoint.lastSavedAt).inHours > 24) {
+        await chkService.clearCheckpoint();
+        return;
+      }
+      final session = checkpoint.toSession();
+      _activeSession = session;
+      _runState = RunActive(paused: checkpoint.isPaused);
+      _startRunTimer();
+      _updateForegroundNotification();
+      if (!checkpoint.isPaused) {
+        _listenToDevicePositionStream();
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void _updateForegroundNotification() {
+    final session = _activeSession;
+    final fg = foregroundService;
+    if (session == null || fg == null || _runState is! RunActive) return;
+    final now = DateTime.now();
+    final elapsed = session.elapsedAt(now);
+    final pace = session.paceSecPerKmAt(now);
+    final isPaused = (_runState as RunActive).paused;
+
+    final title = isPaused ? 'NearPace (Paused)' : 'NearPace (Running)';
+    final text =
+        '${NearPaceFormatters.durationClock(elapsed)} • ${NearPaceFormatters.distanceKmValue(session.distanceMeters)} km • ${NearPaceFormatters.paceValue(pace)}/km';
+
+    fg.update(title: title, text: text, isPaused: isPaused);
+  }
+
+  void _listenToDevicePositionStream() {
+    final locService = locationService;
+    if (locService == null || _isLocalPreview) return;
+    _positionSubscription?.cancel();
+    _positionSubscription = locService.positionStream().listen(
+      (point) {
+        if (_activeSession != null && _runState is RunActive) {
+          final now = DateTime.now();
+          final accepted = _activeSession!.addSample(point, now);
+          if (accepted) {
+            notifyListeners();
+          }
+        }
+      },
+      onError: (error) {
+        _runState = RunFailed('GPS stream error: $error');
+        notifyListeners();
+      },
+    );
+  }
+
   void _initSubscriptions() {
-    if (_isLocalPreview) return;
+    if (_isLocalPreview) {
+      if (_isSignedIn) {
+        unawaited(_restoreCheckpointIfAny());
+      }
+      return;
+    }
 
     // Listen to Firebase auth changes.
     final authRepo = authRepository;
     if (authRepo != null) {
-      _authSubscription = authRepo.authStateChanges().listen((uid) {
+      _authSubscription = authRepo.authStateChanges().listen((uid) async {
         if (uid != null && uid.isNotEmpty) {
           _isSignedIn = true;
+          final profRepo = profileRepository;
+          if (profRepo != null) {
+            try {
+              final prof = await profRepo.getProfile(uid);
+              if (prof != null && (prof.uid == uid || prof.uid.isEmpty)) {
+                _profile = prof;
+              }
+            } catch (_) {}
+          }
           _subscribeToUserData(uid);
           _subscribeToLeaderboard();
+          await _restoreCheckpointIfAny();
         } else {
           _unsubscribeUserData();
           _isSignedIn = false;
         }
+        _isAuthBootstrapped = true;
         notifyListeners();
       });
+    } else {
+      _isAuthBootstrapped = true;
     }
 
     // Listen to weekly leaderboard query.
@@ -211,7 +369,7 @@ class NearPaceController extends ChangeNotifier {
     final profRepo = profileRepository;
     if (profRepo != null) {
       _profileSubscription = profRepo.watchProfile(uid).listen((profile) {
-        if (profile != null) {
+        if (profile != null && (profile.uid == uid || profile.uid.isEmpty)) {
           _profile = profile;
           if (_lastSyncedReminder != profile.runReminder) {
             _lastSyncedReminder = profile.runReminder;
@@ -583,6 +741,8 @@ class NearPaceController extends ChangeNotifier {
     _unsubscribeUserData();
     _lastSyncedReminder = null;
     await reminderService?.cancelAll();
+    foregroundService?.stop();
+    await checkpointService?.clearCheckpoint();
 
     final authRepo = authRepository;
     if (!_isLocalPreview && authRepo != null) {
@@ -783,15 +943,21 @@ class NearPaceController extends ChangeNotifier {
 
   void setLocationPermission(LocationPermissionStatus status) {
     _locationPermission = status;
+    final loc = locationService;
+    if (loc is SimulatedLocationService) {
+      loc.setPermission(status);
+    }
     if (status == LocationPermissionStatus.denied) {
       _runState = const RunFailed(
         'Location permission was denied. Allow location access while using '
         'NearPace to record GPS distance and pace.',
+        reason: RunFailureReason.permissionDenied,
       );
     } else if (status == LocationPermissionStatus.deniedForever) {
       _runState = const RunFailed(
         'Location access is permanently denied. Enable location permission for '
         'NearPace in Android system settings to record runs.',
+        reason: RunFailureReason.permissionDeniedForever,
       );
     } else if (status == LocationPermissionStatus.granted &&
         _runState is RunFailed) {
@@ -832,9 +998,36 @@ class NearPaceController extends ChangeNotifier {
   Future<void> startRecording({
     Duration acquireDelay = const Duration(milliseconds: 650),
   }) async {
-    if (_locationPermission != LocationPermissionStatus.granted) {
+    final locService = locationService;
+    if (locService != null) {
+      final serviceEnabled = await locService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _runState = const RunFailed(
+          'Location services are disabled on your device. Enable GPS in settings to record runs.',
+          reason: RunFailureReason.serviceDisabled,
+        );
+        notifyListeners();
+        return;
+      }
+
+      final permission = await locService.checkPermission();
+      if (permission != LocationPermissionStatus.granted &&
+          _locationPermission != LocationPermissionStatus.granted) {
+        _locationPermission = permission;
+        _runState = RunFailed(
+          'Location permission is required before starting a run.',
+          reason: permission == LocationPermissionStatus.deniedForever
+              ? RunFailureReason.permissionDeniedForever
+              : RunFailureReason.permissionDenied,
+        );
+        notifyListeners();
+        return;
+      }
+      _locationPermission = LocationPermissionStatus.granted;
+    } else if (_locationPermission != LocationPermissionStatus.granted) {
       _runState = const RunFailed(
         'Location permission is required before starting a run.',
+        reason: RunFailureReason.permissionDenied,
       );
       notifyListeners();
       return;
@@ -842,10 +1035,9 @@ class NearPaceController extends ChangeNotifier {
 
     _cancelRunTimer();
     _positionSubscription?.cancel();
-    _runState = const RunPreparing();
+    _runState = const RunPreparing(message: 'Acquiring GPS signal...');
     notifyListeners();
 
-    final locService = locationService;
     if (_isLocalPreview || locService == null) {
       if (acquireDelay > Duration.zero) {
         await Future<void>.delayed(acquireDelay);
@@ -865,27 +1057,43 @@ class NearPaceController extends ChangeNotifier {
 
       _runState = const RunActive(paused: false);
       _startRunTimer();
+      unawaited(
+        foregroundService?.start(
+          title: 'NearPace (Running)',
+          text: '00:00 • 0.00 km • --:--/km',
+          isPaused: false,
+        ),
+      );
+      _saveActiveCheckpoint();
       notifyListeners();
     } else {
-      // Live device mode via LocationTrackingService
-      final serviceEnabled = await locService.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _runState = const RunFailed(
-          'Location services are disabled on your device. Enable GPS in settings to record runs.',
-        );
-        notifyListeners();
-        return;
-      }
+      // Warm up GPS hardware with last known position
+      try {
+        await locService.getLastKnownPosition();
+      } catch (_) {}
 
       final startedAt = DateTime.now();
       final session = RunSession(startedAt: startedAt);
       _activeSession = session;
 
-      final completer = Completer<void>();
+      var firstFixAcquired = false;
       _positionSubscription = locService.positionStream().listen(
         (point) {
-          if (!completer.isCompleted) {
-            completer.complete();
+          if (!firstFixAcquired) {
+            firstFixAcquired = true;
+            if (_runState is RunPreparing) {
+              _runState = const RunActive(paused: false);
+              _startRunTimer();
+              unawaited(
+                foregroundService?.start(
+                  title: 'NearPace (Running)',
+                  text: '00:00 • 0.00 km • --:--/km',
+                  isPaused: false,
+                ),
+              );
+              _saveActiveCheckpoint();
+              notifyListeners();
+            }
           }
           if (_activeSession != null && _runState is RunActive) {
             final now = DateTime.now();
@@ -896,31 +1104,24 @@ class NearPaceController extends ChangeNotifier {
           }
         },
         onError: (error) {
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
           _runState = RunFailed('GPS stream error: $error');
           notifyListeners();
         },
       );
 
-      try {
-        final timeout = acquireDelay > Duration.zero
-            ? acquireDelay
-            : const Duration(seconds: 20);
-        await completer.future.timeout(timeout);
-        if (_runState is! RunPreparing) return;
-        _runState = const RunActive(paused: false);
-        _startRunTimer();
-        notifyListeners();
-      } catch (_) {
-        if (_runState is RunPreparing) {
-          _runState = const RunFailed(
-            'Unable to acquire a reliable GPS fix. Move to an open outdoor area and try again.',
+      if (acquireDelay > Duration.zero) {
+        await Future<void>.delayed(acquireDelay);
+      }
+      // Gentle status update rather than mapping timeout to failure
+      Timer(const Duration(seconds: 10), () {
+        if (_runState is RunPreparing && !firstFixAcquired) {
+          _runState = const RunPreparing(
+            message:
+                'Acquiring GPS signal... Moving under open sky speeds this up.',
           );
           notifyListeners();
         }
-      }
+      });
     }
   }
 
@@ -939,6 +1140,8 @@ class NearPaceController extends ChangeNotifier {
     if (session == null || _runState is! RunActive) return;
     session.pause(DateTime.now());
     _runState = const RunActive(paused: true);
+    _updateForegroundNotification();
+    _saveActiveCheckpoint();
     notifyListeners();
   }
 
@@ -947,6 +1150,8 @@ class NearPaceController extends ChangeNotifier {
     if (session == null || _runState is! RunActive) return;
     session.resume(DateTime.now());
     _runState = const RunActive(paused: false);
+    _updateForegroundNotification();
+    _saveActiveCheckpoint();
     notifyListeners();
   }
 
@@ -955,6 +1160,8 @@ class NearPaceController extends ChangeNotifier {
     _positionSubscription?.cancel();
     _activeSession = null;
     _runState = const RunIdle();
+    foregroundService?.stop();
+    unawaited(checkpointService?.clearCheckpoint());
     notifyListeners();
   }
 
@@ -969,6 +1176,8 @@ class NearPaceController extends ChangeNotifier {
     _positionSubscription?.cancel();
     _positionSubscription = null;
     _runState = const RunStopping();
+    foregroundService?.stop();
+    unawaited(checkpointService?.clearCheckpoint());
     notifyListeners();
 
     if (finalizeDelay > Duration.zero) {
@@ -1019,6 +1228,7 @@ class NearPaceController extends ChangeNotifier {
   }
 
   Future<void> saveActivity(Activity activity) async {
+    unawaited(checkpointService?.clearCheckpoint());
     final existingIndex = _activities.indexWhere((a) => a.id == activity.id);
     if (existingIndex >= 0) {
       _activities[existingIndex] = activity;
@@ -1074,6 +1284,11 @@ class NearPaceController extends ChangeNotifier {
         _cancelRunTimer();
         return;
       }
+      _tickCount++;
+      _updateForegroundNotification();
+      if (_tickCount % 5 == 0) {
+        _saveActiveCheckpoint();
+      }
       if (!state.paused && _isLocalPreview && _simulateGpsInPreview) {
         final loop = NearPaceMockData.simulationLoop();
         final tickTime = DateTime.now();
@@ -1114,6 +1329,7 @@ class NearPaceController extends ChangeNotifier {
   void _cancelRunTimer() {
     _runTickTimer?.cancel();
     _runTickTimer = null;
+    _tickCount = 0;
   }
 
   @override
