@@ -168,7 +168,39 @@ class WeatherSummaryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(snapshot.label, style: textTheme.titleMedium),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            snapshot.label,
+                            style: textTheme.titleMedium,
+                          ),
+                        ),
+                        if (snapshot.isCachedForecast) ...[
+                          const SizedBox(width: NearPaceSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(
+                                NearPaceSpacing.radiusPill,
+                              ),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Text(
+                              'Cached forecast',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colors.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       'Feels like ${snapshot.apparentC.toStringAsFixed(1)}°C '
@@ -194,9 +226,22 @@ class WeatherSummaryCard extends StatelessWidget {
           const SizedBox(height: NearPaceSpacing.sm),
           Divider(color: colors.border),
           const SizedBox(height: NearPaceSpacing.xs),
-          Text(
-            'Weather data by Open-Meteo',
-            style: textTheme.bodySmall?.copyWith(color: colors.textMuted),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Weather data by Open-Meteo',
+                style: textTheme.bodySmall?.copyWith(color: colors.textMuted),
+              ),
+              if (snapshot.isCachedForecast)
+                Text(
+                  'Layer 1 Offline Cache',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.accentText,
+                    fontSize: 11,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

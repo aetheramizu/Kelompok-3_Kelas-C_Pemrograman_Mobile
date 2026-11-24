@@ -17,11 +17,15 @@ import '../domain/run_session.dart';
 import '../domain/run_state.dart';
 import '../domain/user_profile.dart';
 import '../domain/weather.dart';
+import '../services/connectivity_service.dart';
 import '../services/location_tracking_service.dart';
+import '../services/pending_sync_storage.dart';
 import '../services/push_notification_service.dart';
 import '../services/run_checkpoint_service.dart';
 import '../services/run_foreground_service.dart';
 import '../services/run_reminder_service.dart';
+import '../services/sync_coordinator.dart';
+import '../services/weather_cache_service.dart';
 import '../utils/formatters.dart';
 import 'mock_data.dart';
 
@@ -68,6 +72,10 @@ class NearPaceController extends ChangeNotifier {
     this.reminderService,
     this.foregroundService,
     this.checkpointService,
+    this.pendingSyncStorage,
+    this.weatherCacheService,
+    this.connectivityService,
+    SyncCoordinator? syncCoordinator,
   }) : _clockAnchor = clockNow,
        _isSignedIn = startSignedIn,
        _isLocalPreview = isLocalPreview ?? (firebaseStatus is! FirebaseReady),
@@ -86,6 +94,8 @@ class NearPaceController extends ChangeNotifier {
     _initForegroundService();
     _initSubscriptions();
     _checkInitialLocationPermission();
+    _initSyncCoordinator(syncCoordinator);
+    _loadPendingActivities();
   }
 
   final FirebaseBootstrapStatus firebaseStatus;
@@ -102,6 +112,20 @@ class NearPaceController extends ChangeNotifier {
   final RunReminderService? reminderService;
   final RunForegroundService? foregroundService;
   final RunCheckpointService? checkpointService;
+  final PendingSyncStorage? pendingSyncStorage;
+  final WeatherCacheService? weatherCacheService;
+  final ConnectivityService? connectivityService;
+
+  SyncCoordinator? _syncCoordinator;
+  SyncCoordinator? get syncCoordinator => _syncCoordinator;
+
+  bool _isOffline = false;
+  bool get isOffline => _isOffline;
+
+  bool _isSyncingActivities = false;
+  bool get isSyncingActivities => _isSyncingActivities;
+
+  int get pendingSyncCount => _activities.where((a) => a.pendingSync).length;
 
   RunReminder? _lastSyncedReminder;
   int _tickCount = 0;
@@ -206,6 +230,71 @@ class NearPaceController extends ChangeNotifier {
         }
         break;
     }
+  }
+
+  void _initSyncCoordinator(SyncCoordinator? custom) {
+    if (custom != null) {
+      _syncCoordinator = custom;
+    } else if (connectivityService != null) {
+      _syncCoordinator = NearPaceSyncCoordinator(
+        connectivityService: connectivityService!,
+        onSyncRequested: () => syncPendingActivities(),
+      );
+    }
+    _syncCoordinator?.isOnlineStream.listen((online) {
+      _isOffline = !online;
+      notifyListeners();
+    });
+    connectivityService
+        ?.checkOnline()
+        .then((online) {
+          _isOffline = !online;
+          notifyListeners();
+        })
+        .catchError((_) {});
+  }
+
+  Future<void> _loadPendingActivities() async {
+    final storage = pendingSyncStorage;
+    if (storage == null) return;
+    try {
+      final pending = await storage.getPendingActivities();
+      for (final act in pending) {
+        final idx = _activities.indexWhere((a) => a.id == act.id);
+        if (idx >= 0) {
+          _activities[idx] = act;
+        } else {
+          _activities.insert(0, act);
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _mergePendingActivities() async {
+    final storage = pendingSyncStorage;
+    if (storage == null) return;
+    try {
+      final pending = await storage.getPendingActivities();
+      for (final act in pending) {
+        final idx = _activities.indexWhere((a) => a.id == act.id);
+        if (idx >= 0) {
+          _activities[idx] = act;
+        } else {
+          _activities.insert(0, act);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void setOffline(bool offline) {
+    _isOffline = offline;
+    notifyListeners();
+  }
+
+  Future<void> preCacheWeatherForecast(GeoPointLite location) async {
+    if (_isOffline) return;
+    await weatherRepository?.preCacheHourlyForecast(location);
   }
 
   void _checkInitialLocationPermission() {
@@ -386,9 +475,10 @@ class NearPaceController extends ChangeNotifier {
       _activitiesSubscription = actRepo
           .watchActivities(uid)
           .listen(
-            (list) {
+            (list) async {
               _activities.clear();
               _activities.addAll(list);
+              await _mergePendingActivities();
               _historyState = ViewLoadState.ready;
               _historyError = null;
               notifyListeners();
@@ -1052,6 +1142,7 @@ class NearPaceController extends ChangeNotifier {
       if (_simulateGpsInPreview) {
         final points = NearPaceMockData.simulationLoop();
         session.addSample(points.first, startedAt);
+        unawaited(preCacheWeatherForecast(points.first));
         _simIndex = 1;
       }
 
@@ -1081,6 +1172,7 @@ class NearPaceController extends ChangeNotifier {
         (point) {
           if (!firstFixAcquired) {
             firstFixAcquired = true;
+            unawaited(preCacheWeatherForecast(point));
             if (_runState is RunPreparing) {
               _runState = const RunActive(paused: false);
               _startRunTimer();
@@ -1196,22 +1288,42 @@ class NearPaceController extends ChangeNotifier {
     WeatherSnapshot? weather;
     final weatherRepo = weatherRepository;
     if (_isLocalPreview || weatherRepo == null) {
-      weather = _weatherAvailableInPreview && route.isNotEmpty
-          ? WeatherSnapshot(
-              temperatureC: 27.6,
-              apparentC: 29.9,
-              code: 1,
-              fetchedAt: endedAt,
-            )
-          : null;
+      if (_weatherAvailableInPreview && route.isNotEmpty) {
+        if (!_isOffline) {
+          weather = WeatherSnapshot(
+            temperatureC: 27.6,
+            apparentC: 29.9,
+            code: 1,
+            fetchedAt: endedAt,
+          );
+        } else {
+          // Layer 1 Fallback in preview
+          weather =
+              weatherRepo?.getCachedForecast(route.first, session.startedAt) ??
+              WeatherSnapshot(
+                temperatureC: 26.5,
+                apparentC: 28.0,
+                code: 2,
+                fetchedAt: session.startedAt,
+                isCachedForecast: true,
+              );
+        }
+      }
     } else {
       if (route.isNotEmpty) {
-        weather = await weatherRepo.fetchCurrentWeather(route.first);
+        if (!_isOffline) {
+          weather = await weatherRepo.fetchCurrentWeather(route.first);
+        }
+        // Layer 1 Fallback if live weather is null or device is offline
+        weather ??= weatherRepo.getCachedForecast(
+          route.first,
+          session.startedAt,
+        );
       }
     }
 
     final activity = Activity(
-      id: 'local-${endedAt.millisecondsSinceEpoch}',
+      id: 'run_${endedAt.millisecondsSinceEpoch}',
       startedAt: session.startedAt,
       endedAt: endedAt,
       distanceM: distanceM,
@@ -1219,6 +1331,7 @@ class NearPaceController extends ChangeNotifier {
       avgPaceSecPerKm: avgPace,
       route: route,
       weather: weather,
+      pendingSync: _isOffline,
     );
 
     _activeSession = null;
@@ -1229,11 +1342,18 @@ class NearPaceController extends ChangeNotifier {
 
   Future<void> saveActivity(Activity activity) async {
     unawaited(checkpointService?.clearCheckpoint());
-    final existingIndex = _activities.indexWhere((a) => a.id == activity.id);
+    var activityToSave = activity;
+    if (_isOffline) {
+      activityToSave = activityToSave.copyWith(pendingSync: true);
+    }
+
+    final existingIndex = _activities.indexWhere(
+      (a) => a.id == activityToSave.id,
+    );
     if (existingIndex >= 0) {
-      _activities[existingIndex] = activity;
+      _activities[existingIndex] = activityToSave;
     } else {
-      _activities.insert(0, activity);
+      _activities.insert(0, activityToSave);
     }
     notifyListeners();
 
@@ -1242,25 +1362,142 @@ class NearPaceController extends ChangeNotifier {
       _isSavingActivity = true;
       notifyListeners();
       try {
-        final savedId = await actRepo.saveActivity(_profile.uid, activity);
-        final idx = _activities.indexWhere((a) => a.id == activity.id);
-        if (idx >= 0 && savedId != activity.id) {
-          _activities[idx] = activity.copyWith(id: savedId);
-        }
-        if (activity.isPublic) {
-          if (!_profile.showOnLeaderboard) {
-            _profile = _profile.copyWith(showOnLeaderboard: true);
-            profileRepository?.setShowOnLeaderboard(_profile.uid, true);
+        if (_isOffline) {
+          await pendingSyncStorage?.addPendingActivity(activityToSave);
+        } else {
+          try {
+            final savedId = await actRepo.saveActivity(
+              _profile.uid,
+              activityToSave.copyWith(pendingSync: false),
+            );
+            final idx = _activities.indexWhere(
+              (a) => a.id == activityToSave.id,
+            );
+            if (idx >= 0) {
+              _activities[idx] = activityToSave.copyWith(
+                id: savedId,
+                pendingSync: false,
+              );
+            }
+            await pendingSyncStorage?.removePendingActivity(activityToSave.id);
+
+            if (activity.isPublic) {
+              if (!_profile.showOnLeaderboard) {
+                _profile = _profile.copyWith(showOnLeaderboard: true);
+                profileRepository?.setShowOnLeaderboard(_profile.uid, true);
+              }
+              await _syncLeaderboardEntry(runCity: activity.city);
+            } else if (_profile.showOnLeaderboard) {
+              await _syncLeaderboardEntry();
+            }
+          } catch (_) {
+            final pendingAct = activityToSave.copyWith(pendingSync: true);
+            final idx = _activities.indexWhere(
+              (a) => a.id == activityToSave.id,
+            );
+            if (idx >= 0) {
+              _activities[idx] = pendingAct;
+            }
+            await pendingSyncStorage?.addPendingActivity(pendingAct);
           }
-          await _syncLeaderboardEntry(runCity: activity.city);
-        } else if (_profile.showOnLeaderboard) {
-          await _syncLeaderboardEntry();
         }
       } finally {
         _isSavingActivity = false;
         notifyListeners();
       }
+    } else {
+      if (activityToSave.pendingSync) {
+        await pendingSyncStorage?.addPendingActivity(activityToSave);
+      }
     }
+  }
+
+  Future<int> syncPendingActivities({bool force = false}) async {
+    if (_isSyncingActivities) return 0;
+
+    final conn = connectivityService;
+    if (conn != null) {
+      _isOffline = !(await conn.checkOnline());
+      notifyListeners();
+      if (_isOffline && !force) return 0;
+    }
+
+    _isSyncingActivities = true;
+    notifyListeners();
+
+    var syncedCount = 0;
+    try {
+      final queue =
+          await pendingSyncStorage?.getPendingActivities() ?? const [];
+      final pendingInMemory = _activities.where((a) => a.pendingSync).toList();
+      final allPending = <String, Activity>{};
+      for (final a in queue) {
+        allPending[a.id] = a;
+      }
+      for (final a in pendingInMemory) {
+        allPending[a.id] = a;
+      }
+
+      if (allPending.isEmpty) return 0;
+
+      final actRepo = activityRepository;
+      final weatherRepo = weatherRepository;
+
+      for (final activity in allPending.values) {
+        var currentActivity = activity;
+
+        // Layer 2 Weather Backfill if weather is missing or cached forecast
+        if ((currentActivity.weather == null ||
+                currentActivity.weather!.isCachedForecast) &&
+            currentActivity.route.isNotEmpty &&
+            weatherRepo != null) {
+          final historical = await weatherRepo.fetchHistoricalWeather(
+            currentActivity.route.first,
+            currentActivity.startedAt,
+          );
+          if (historical != null) {
+            currentActivity = currentActivity.copyWith(weather: historical);
+          }
+        }
+
+        if (actRepo != null && _profile.uid.isNotEmpty) {
+          try {
+            final savedId = await actRepo.saveActivity(
+              _profile.uid,
+              currentActivity.copyWith(pendingSync: false),
+            );
+            await pendingSyncStorage?.removePendingActivity(activity.id);
+
+            final idx = _activities.indexWhere((a) => a.id == activity.id);
+            if (idx >= 0) {
+              _activities[idx] = currentActivity.copyWith(
+                id: savedId,
+                pendingSync: false,
+              );
+            }
+            syncedCount++;
+          } catch (_) {
+            // Keep pending for next retry
+          }
+        } else {
+          await pendingSyncStorage?.removePendingActivity(activity.id);
+          final idx = _activities.indexWhere((a) => a.id == activity.id);
+          if (idx >= 0) {
+            _activities[idx] = currentActivity.copyWith(pendingSync: false);
+          }
+          syncedCount++;
+        }
+      }
+
+      if (syncedCount > 0 && _profile.showOnLeaderboard) {
+        await _syncLeaderboardEntry();
+      }
+    } finally {
+      _isSyncingActivities = false;
+      notifyListeners();
+    }
+
+    return syncedCount;
   }
 
   Future<void> deleteActivity(String id) async {

@@ -101,6 +101,7 @@ class FirestoreActivityRepository implements ActivityRepository {
           'apparentC': activity.weather!.apparentC,
           'code': activity.weather!.code,
           'fetchedAt': Timestamp.fromDate(activity.weather!.fetchedAt.toUtc()),
+          'isCachedForecast': activity.weather!.isCachedForecast,
         },
       'isPublic': activity.isPublic,
       if (activity.city != null) 'city': activity.city,
@@ -152,6 +153,7 @@ class FirestoreActivityRepository implements ActivityRepository {
           apparentC: (rawWeather['apparentC'] as num).toDouble(),
           code: (rawWeather['code'] as num).toInt(),
           fetchedAt: fetchedAt,
+          isCachedForecast: (rawWeather['isCachedForecast'] as bool?) ?? false,
         );
       }
     }

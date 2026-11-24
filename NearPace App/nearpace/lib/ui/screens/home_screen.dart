@@ -47,326 +47,372 @@ class HomeScreen extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
-            child: CustomScrollView(
-              key: const ValueKey('home-scroll'),
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    gutter,
-                    NearPaceSpacing.md,
-                    gutter,
-                    NearPaceSpacing.xxxl,
-                  ),
-                  sliver: SliverList.list(
-                    children: [
-                      // Greeting row + avatar shortcut to Profile.
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+            child: RefreshIndicator(
+              onRefresh: () => controller.syncPendingActivities(force: true),
+              child: CustomScrollView(
+                key: const ValueKey('home-scroll'),
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      gutter,
+                      NearPaceSpacing.md,
+                      gutter,
+                      NearPaceSpacing.xxxl,
+                    ),
+                    sliver: SliverList.list(
+                      children: [
+                        if (controller.pendingSyncCount > 0) ...[
+                          NearPaceCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NearPaceSpacing.sm,
+                              vertical: NearPaceSpacing.xs,
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  NearPaceFormatters.shortHeaderDate(
-                                    controller.now,
-                                  ).toUpperCase(),
-                                  style: textTheme.labelSmall?.copyWith(
-                                    letterSpacing: 1.0,
+                                Icon(
+                                  Icons.cloud_upload_outlined,
+                                  size: 18,
+                                  color: colors.warning,
+                                ),
+                                const SizedBox(width: NearPaceSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    '${controller.pendingSyncCount} ${controller.pendingSyncCount == 1 ? 'run' : 'runs'} waiting to sync',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colors.warning,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Ready, $firstName?',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.headlineMedium,
+                                TextButton(
+                                  onPressed: controller.isSyncingActivities
+                                      ? null
+                                      : () => controller.syncPendingActivities(
+                                          force: true,
+                                        ),
+                                  child: controller.isSyncingActivities
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Sync now'),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: NearPaceSpacing.sm),
-                          Semantics(
-                            button: true,
-                            label: 'Open profile',
-                            child: InkWell(
-                              onTap: () => controller.setTabIndex(3),
-                              customBorder: const CircleBorder(),
-                              child: Container(
-                                width: NearPaceSpacing.minTapTarget,
-                                height: NearPaceSpacing.minTapTarget,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: colors.deepGreenSurface,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: colors.accentText.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  profile.initials,
-                                  style: textTheme.titleSmall?.copyWith(
-                                    color: colors.accentText,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                          const SizedBox(height: NearPaceSpacing.sm),
                         ],
-                      ),
-                      const SizedBox(height: NearPaceSpacing.xs),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: StatusPill(
-                          label: nextReminderLabel != null
-                              ? 'Next run · $nextReminderLabel'
-                              : 'Set a run reminder',
-                          icon: nextReminderLabel != null
-                              ? Icons.notifications_active_outlined
-                              : Icons.alarm_add_rounded,
-                          foregroundColor: nextReminderLabel != null
-                              ? colors.accentText
-                              : colors.textSecondary,
-                          backgroundColor: nextReminderLabel != null
-                              ? colors.deepGreenSurface
-                              : colors.surfaceElevated,
-                          onTap: () => controller.setTabIndex(3),
-                        ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // This Week Summary Card.
-                      NearPaceCard(
-                        padding: const EdgeInsets.all(NearPaceSpacing.lg),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'THIS WEEK',
-                                        style: textTheme.labelSmall?.copyWith(
-                                          letterSpacing: 1.0,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        NearPaceFormatters.weekRangeLabel(
-                                          controller.now,
-                                        ),
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                StatusPill(
-                                  label:
-                                      '${controller.weeklyActivities.length} '
-                                      '${controller.weeklyActivities.length == 1 ? 'run' : 'runs'}',
-                                  foregroundColor: colors.accentText,
-                                  backgroundColor: colors.deepGreenSurface,
-                                  borderColor: colors.performanceGreen
-                                      .withValues(alpha: 0.35),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: NearPaceSpacing.md),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
-                                children: [
-                                  Text(
-                                    NearPaceFormatters.distanceKmValue(
-                                      controller.weeklyDistanceMeters,
-                                    ),
-                                    style: textTheme.displayMedium?.copyWith(
-                                      color: colors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'km',
-                                    style: textTheme.titleMedium?.copyWith(
-                                      color: colors.accentText,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: NearPaceSpacing.md),
-                            WeeklyDistanceChart(
-                              dailyDistancesMeters:
-                                  controller.weeklyDailyDistancesMeters,
-                              todayWeekday: controller.now.weekday,
-                            ),
-                            const SizedBox(height: NearPaceSpacing.md),
-                            Divider(color: colors.border),
-                            const SizedBox(height: NearPaceSpacing.md),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: MetricTile(
-                                    label: 'Time',
-                                    value: NearPaceFormatters.durationCompact(
-                                      controller.weeklyDuration,
-                                    ),
-                                    compact: true,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: MetricTile(
-                                    label: 'Avg pace',
-                                    value: NearPaceFormatters.paceValue(
-                                      controller.weeklyAvgPaceSecPerKm,
-                                    ),
-                                    unit: '/km',
-                                    compact: true,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // Primary Quick-Start Run Card.
-                      NearPaceCard(
-                        backgroundColor: colors.accent,
-                        borderColor: colors.accent,
-                        onTap: () => _openRecorder(context),
-                        semanticLabel: 'Start a new outdoor run',
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: NearPaceSpacing.lg,
-                          vertical: NearPaceSpacing.md,
-                        ),
-                        child: Row(
+                        // Greeting row + avatar shortcut to Profile.
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'QUICK START',
+                                    NearPaceFormatters.shortHeaderDate(
+                                      controller.now,
+                                    ).toUpperCase(),
                                     style: textTheme.labelSmall?.copyWith(
-                                      color: colors.onAccent.withValues(
-                                        alpha: 0.72,
-                                      ),
                                       letterSpacing: 1.0,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Start a run',
-                                    style: textTheme.headlineMedium?.copyWith(
-                                      color: colors.onAccent,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Foreground GPS distance, pace & route sketch',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colors.onAccent.withValues(
-                                        alpha: 0.78,
-                                      ),
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                    'Ready, $firstName?',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textTheme.headlineMedium,
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: NearPaceSpacing.sm),
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: colors.onAccent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.play_arrow_rounded,
-                                size: 30,
-                                color: colors.accent,
+                            Semantics(
+                              button: true,
+                              label: 'Open profile',
+                              child: InkWell(
+                                onTap: () => controller.setTabIndex(3),
+                                customBorder: const CircleBorder(),
+                                child: Container(
+                                  width: NearPaceSpacing.minTapTarget,
+                                  height: NearPaceSpacing.minTapTarget,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: colors.deepGreenSurface,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: colors.accentText.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    profile.initials,
+                                    style: textTheme.titleSmall?.copyWith(
+                                      color: colors.accentText,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.xl),
-
-                      // Recent Activities Section.
-                      SectionHeader(
-                        title: 'Recent runs',
-                        trailingLabel: recentRuns.isEmpty ? null : 'See all',
-                        onTrailingTap: recentRuns.isEmpty
-                            ? null
-                            : () => controller.setTabIndex(1),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.xs),
-                      switch (controller.historyState) {
-                        ViewLoadState.loading => const LoadingSkeletonList(
-                          itemCount: 3,
-                        ),
-                        ViewLoadState.error => ErrorStateView(
-                          title: 'Could not load recent runs',
-                          message:
-                              controller.historyError ??
-                              'Unable to load your saved activities right now.',
-                          onRetry: controller.retryHistory,
-                        ),
-                        ViewLoadState.ready when recentRuns.isEmpty =>
-                          EmptyStateView(
-                            icon: Icons.directions_run_rounded,
-                            title: 'No runs recorded yet',
-                            message:
-                                'Start an outdoor run to log your distance, '
-                                'average pace, and route sketch.',
-                            actionLabel: 'Start first run',
-                            onAction: () => _openRecorder(context),
+                        const SizedBox(height: NearPaceSpacing.xs),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: StatusPill(
+                            label: nextReminderLabel != null
+                                ? 'Next run · $nextReminderLabel'
+                                : 'Set a run reminder',
+                            icon: nextReminderLabel != null
+                                ? Icons.notifications_active_outlined
+                                : Icons.alarm_add_rounded,
+                            foregroundColor: nextReminderLabel != null
+                                ? colors.accentText
+                                : colors.textSecondary,
+                            backgroundColor: nextReminderLabel != null
+                                ? colors.deepGreenSurface
+                                : colors.surfaceElevated,
+                            onTap: () => controller.setTabIndex(3),
                           ),
-                        ViewLoadState.ready => Column(
-                          children: List.generate(recentRuns.length, (index) {
-                            final activity = recentRuns[index];
-                            return Padding(
-                              key: ValueKey(activity.id),
-                              padding: EdgeInsets.only(
-                                bottom: index == recentRuns.length - 1
-                                    ? 0
-                                    : NearPaceSpacing.sm,
-                              ),
-                              child: ActivityCard(
-                                activity: activity,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          RunResultScreen(activity: activity),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }),
                         ),
-                      },
-                    ],
+                        const SizedBox(height: NearPaceSpacing.md),
+
+                        // This Week Summary Card.
+                        NearPaceCard(
+                          padding: const EdgeInsets.all(NearPaceSpacing.lg),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'THIS WEEK',
+                                          style: textTheme.labelSmall?.copyWith(
+                                            letterSpacing: 1.0,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          NearPaceFormatters.weekRangeLabel(
+                                            controller.now,
+                                          ),
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colors.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  StatusPill(
+                                    label:
+                                        '${controller.weeklyActivities.length} '
+                                        '${controller.weeklyActivities.length == 1 ? 'run' : 'runs'}',
+                                    foregroundColor: colors.accentText,
+                                    backgroundColor: colors.deepGreenSurface,
+                                    borderColor: colors.performanceGreen
+                                        .withValues(alpha: 0.35),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: NearPaceSpacing.md),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      NearPaceFormatters.distanceKmValue(
+                                        controller.weeklyDistanceMeters,
+                                      ),
+                                      style: textTheme.displayMedium?.copyWith(
+                                        color: colors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'km',
+                                      style: textTheme.titleMedium?.copyWith(
+                                        color: colors.accentText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: NearPaceSpacing.md),
+                              WeeklyDistanceChart(
+                                dailyDistancesMeters:
+                                    controller.weeklyDailyDistancesMeters,
+                                todayWeekday: controller.now.weekday,
+                              ),
+                              const SizedBox(height: NearPaceSpacing.md),
+                              Divider(color: colors.border),
+                              const SizedBox(height: NearPaceSpacing.md),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: MetricTile(
+                                      label: 'Time',
+                                      value: NearPaceFormatters.durationCompact(
+                                        controller.weeklyDuration,
+                                      ),
+                                      compact: true,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: MetricTile(
+                                      label: 'Avg pace',
+                                      value: NearPaceFormatters.paceValue(
+                                        controller.weeklyAvgPaceSecPerKm,
+                                      ),
+                                      unit: '/km',
+                                      compact: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: NearPaceSpacing.md),
+
+                        // Primary Quick-Start Run Card.
+                        NearPaceCard(
+                          backgroundColor: colors.accent,
+                          borderColor: colors.accent,
+                          onTap: () => _openRecorder(context),
+                          semanticLabel: 'Start a new outdoor run',
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NearPaceSpacing.lg,
+                            vertical: NearPaceSpacing.md,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'QUICK START',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colors.onAccent.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Start a run',
+                                      style: textTheme.headlineMedium?.copyWith(
+                                        color: colors.onAccent,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Foreground GPS distance, pace & route sketch',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colors.onAccent.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: NearPaceSpacing.sm),
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: colors.onAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 30,
+                                  color: colors.accent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: NearPaceSpacing.xl),
+
+                        // Recent Activities Section.
+                        SectionHeader(
+                          title: 'Recent runs',
+                          trailingLabel: recentRuns.isEmpty ? null : 'See all',
+                          onTrailingTap: recentRuns.isEmpty
+                              ? null
+                              : () => controller.setTabIndex(1),
+                        ),
+                        const SizedBox(height: NearPaceSpacing.xs),
+                        switch (controller.historyState) {
+                          ViewLoadState.loading => const LoadingSkeletonList(
+                            itemCount: 3,
+                          ),
+                          ViewLoadState.error => ErrorStateView(
+                            title: 'Could not load recent runs',
+                            message: controller.historyError ?? 'Unable to load your saved activities right now.',
+                            onRetry: controller.retryHistory,
+                          ),
+                          ViewLoadState.ready when recentRuns.isEmpty =>
+                            EmptyStateView(
+                              icon: Icons.directions_run_rounded,
+                              title: 'No runs recorded yet',
+                              message:
+                                  'Start an outdoor run to log your distance, '
+                                  'average pace, and route sketch.',
+                              actionLabel: 'Start first run',
+                              onAction: () => _openRecorder(context),
+                            ),
+                          ViewLoadState.ready => Column(
+                            children: List.generate(recentRuns.length, (index) {
+                              final activity = recentRuns[index];
+                              return Padding(
+                                key: ValueKey(activity.id),
+                                padding: EdgeInsets.only(
+                                  bottom: index == recentRuns.length - 1
+                                      ? 0
+                                      : NearPaceSpacing.sm,
+                                ),
+                                child: ActivityCard(
+                                  activity: activity,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) =>
+                                            RunResultScreen(activity: activity),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            }),
+                          ),
+                        },
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

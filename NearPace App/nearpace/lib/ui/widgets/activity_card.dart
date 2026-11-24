@@ -58,6 +58,44 @@ class ActivityCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: NearPaceSpacing.xs),
+                    if (activity.pendingSync) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.warningSurface,
+                          borderRadius: BorderRadius.circular(
+                            NearPaceSpacing.radiusPill,
+                          ),
+                          border: Border.all(
+                            color: colors.warning.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.cloud_upload_outlined,
+                              size: 11,
+                              color: colors.warning,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Pending sync',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: colors.warning,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: NearPaceSpacing.xs),
+                    ],
                     WeatherPill(weather: activity.weather),
                   ],
                 ),

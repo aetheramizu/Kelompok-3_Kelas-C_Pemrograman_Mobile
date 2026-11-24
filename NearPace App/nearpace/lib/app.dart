@@ -9,11 +9,14 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/leaderboard_repository.dart';
 import 'data/repositories/profile_repository.dart';
 import 'data/repositories/weather_repository.dart';
+import 'services/connectivity_service.dart';
 import 'services/location_tracking_service.dart';
+import 'services/pending_sync_storage.dart';
 import 'services/push_notification_service.dart';
 import 'services/run_checkpoint_service.dart';
 import 'services/run_foreground_service.dart';
 import 'services/run_reminder_service.dart';
+import 'services/weather_cache_service.dart';
 import 'state/nearpace_controller.dart';
 import 'theme/nearpace_spacing.dart';
 import 'theme/nearpace_theme.dart';
@@ -40,6 +43,9 @@ class NearPaceApp extends StatelessWidget {
     this.reminderService,
     this.foregroundService,
     this.checkpointService,
+    this.pendingSyncStorage,
+    this.weatherCacheService,
+    this.connectivityService,
   }) : firebaseStatus =
            firebaseStatus ?? FirebaseUnconfigured(FirebaseConfig.missingKeys);
 
@@ -58,11 +64,19 @@ class NearPaceApp extends StatelessWidget {
   final RunReminderService? reminderService;
   final RunForegroundService? foregroundService;
   final RunCheckpointService? checkpointService;
+  final PendingSyncStorage? pendingSyncStorage;
+  final WeatherCacheService? weatherCacheService;
+  final ConnectivityService? connectivityService;
 
   @override
   Widget build(BuildContext context) {
     final hasFirebase = Firebase.apps.isNotEmpty;
     final isReady = firebaseStatus is FirebaseReady && hasFirebase;
+    final weatherCache =
+        weatherCacheService ??
+        (isReady
+            ? PreferencesWeatherCacheService()
+            : InMemoryWeatherCacheService());
 
     return ChangeNotifierProvider<NearPaceController>(
       create: (_) => NearPaceController(
@@ -89,7 +103,9 @@ class NearPaceApp extends StatelessWidget {
                 : MockLeaderboardRepository()),
         weatherRepository:
             weatherRepository ??
-            (isReady ? OpenMeteoWeatherRepository() : MockWeatherRepository()),
+            (isReady
+                ? OpenMeteoWeatherRepository(cacheService: weatherCache)
+                : MockWeatherRepository()),
         locationService:
             locationService ??
             (isReady
@@ -113,6 +129,15 @@ class NearPaceApp extends StatelessWidget {
             (isReady
                 ? PreferencesRunCheckpointService()
                 : InMemoryRunCheckpointService()),
+        pendingSyncStorage:
+            pendingSyncStorage ??
+            (isReady
+                ? PreferencesPendingSyncStorage()
+                : InMemoryPendingSyncStorage()),
+        weatherCacheService: weatherCache,
+        connectivityService:
+            connectivityService ??
+            (isReady ? SystemConnectivityService() : MockConnectivityService()),
       ),
       child: const _NearPaceMaterialApp(),
     );
@@ -142,7 +167,11 @@ class _NearPaceMaterialAppState extends State<_NearPaceMaterialApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    context.read<NearPaceController>().handleAppLifecycleState(state);
+    final controller = context.read<NearPaceController>();
+    controller.handleAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      controller.syncCoordinator?.onAppResumed();
+    }
   }
 
   @override

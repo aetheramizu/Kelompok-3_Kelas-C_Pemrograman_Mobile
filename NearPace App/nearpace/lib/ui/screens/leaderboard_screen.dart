@@ -83,6 +83,42 @@ class LeaderboardScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                        if (controller.isOffline) ...[
+                          const SizedBox(height: NearPaceSpacing.sm),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NearPaceSpacing.sm,
+                              vertical: NearPaceSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.warningSurface,
+                              borderRadius: BorderRadius.circular(
+                                NearPaceSpacing.radiusSm,
+                              ),
+                              border: Border.all(
+                                color: colors.warning.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.cloud_off_rounded,
+                                  size: 16,
+                                  color: colors.warning,
+                                ),
+                                const SizedBox(width: NearPaceSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    'Offline — showing cached leaderboard standings.',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colors.warning,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: NearPaceSpacing.md),
 
                         // Opt-in privacy prompt when runner is currently hidden.
