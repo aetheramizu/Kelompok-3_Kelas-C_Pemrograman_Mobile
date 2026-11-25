@@ -218,6 +218,9 @@ class NearPaceController extends ChangeNotifier {
   RunSession? get activeSession => _activeSession;
 
   Timer? _runTickTimer;
+  Timer? _gpsHintTimer;
+  String? _subscribedGroupWeekKey;
+  final Set<String> _inFlightSyncIds = <String>{};
   int _simIndex = 0;
   bool _simulateGpsInPreview = true;
   bool get simulateGpsInPreview => _simulateGpsInPreview;
@@ -254,9 +257,10 @@ class NearPaceController extends ChangeNotifier {
         resumeRecording();
         break;
       case 'stop':
-        if (_runState is RunActive) {
+        if (_runState is RunActive && !(_runState as RunActive).paused) {
           pauseRecording();
         }
+        unawaited(foregroundService?.launchApp());
         break;
     }
   }
@@ -285,12 +289,22 @@ class NearPaceController extends ChangeNotifier {
         .catchError((_) {});
   }
 
+  String? get _pendingSyncUid =>
+      _profile.uid.trim().isEmpty ? null : _profile.uid.trim();
+
+  String _clampDisplayName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'Runner';
+    return trimmed.length > 40 ? trimmed.substring(0, 40) : trimmed;
+  }
+
   Future<void> _loadPendingActivities() async {
     final storage = pendingSyncStorage;
     if (storage == null) return;
     try {
-      final pending = await storage.getPendingActivities();
+      final pending = await storage.getPendingActivities(uid: _pendingSyncUid);
       for (final act in pending) {
+        if (_inFlightSyncIds.contains(act.id)) continue;
         final idx = _activities.indexWhere((a) => a.id == act.id);
         if (idx >= 0) {
           _activities[idx] = act;
@@ -306,8 +320,9 @@ class NearPaceController extends ChangeNotifier {
     final storage = pendingSyncStorage;
     if (storage == null) return;
     try {
-      final pending = await storage.getPendingActivities();
+      final pending = await storage.getPendingActivities(uid: _pendingSyncUid);
       for (final act in pending) {
+        if (_inFlightSyncIds.contains(act.id)) continue;
         final idx = _activities.indexWhere((a) => a.id == act.id);
         if (idx >= 0) {
           _activities[idx] = act;
@@ -370,22 +385,46 @@ class NearPaceController extends ChangeNotifier {
   }
 
   Future<void> _restoreCheckpointIfAny() async {
+    if (_activeSession != null || _runState is RunActive) return;
     final chkService = checkpointService;
     if (chkService == null) return;
     try {
       final checkpoint = await chkService.loadCheckpoint();
       if (checkpoint == null) return;
-      if (DateTime.now().difference(checkpoint.lastSavedAt).inHours > 24) {
+      if (_activeSession != null || _runState is RunActive) return;
+      final nowTs = DateTime.now();
+      final gap = nowTs.difference(checkpoint.lastSavedAt);
+      if (gap.inHours > 24) {
         await chkService.clearCheckpoint();
         return;
       }
       final session = checkpoint.toSession();
+      // If the app was killed while unpaused, auto-pause at the last checkpoint
+      // timestamp so time spent dead does not inflate elapsed run duration.
+      final autoPaused =
+          !checkpoint.isPaused && gap > const Duration(minutes: 2);
+      if (autoPaused) {
+        session.pause(checkpoint.lastSavedAt);
+      }
+      final effectivePaused = checkpoint.isPaused || autoPaused;
       _activeSession = session;
-      _runState = RunActive(paused: checkpoint.isPaused);
+      _runState = RunActive(paused: effectivePaused);
       _startRunTimer();
-      _updateForegroundNotification();
-      if (!checkpoint.isPaused) {
+      final elapsed = session.elapsedAt(nowTs);
+      final pace = session.paceSecPerKmAt(nowTs);
+      unawaited(
+        foregroundService?.start(
+          title: effectivePaused ? 'NearPace (Paused)' : 'NearPace (Running)',
+          text:
+              '${NearPaceFormatters.durationClock(elapsed)} • ${NearPaceFormatters.distanceKmValue(session.distanceMeters)} km • ${NearPaceFormatters.paceValue(pace)}/km',
+          isPaused: effectivePaused,
+        ),
+      );
+      if (!effectivePaused) {
         _listenToDevicePositionStream();
+      }
+      if (autoPaused) {
+        _saveActiveCheckpoint();
       }
       notifyListeners();
     } catch (_) {}
@@ -514,6 +553,11 @@ class NearPaceController extends ChangeNotifier {
               _historyState = ViewLoadState.ready;
               _historyError = null;
               notifyListeners();
+              if (!_isOffline &&
+                  !_isSyncingActivities &&
+                  pendingSyncCount > 0) {
+                unawaited(syncPendingActivities());
+              }
             },
             onError: (error) {
               _historyState = ViewLoadState.error;
@@ -588,6 +632,17 @@ class NearPaceController extends ChangeNotifier {
     }
 
     final weekKey = currentWeekKey;
+    final weekRolledOver =
+        _subscribedGroupWeekKey != null && _subscribedGroupWeekKey != weekKey;
+    if (weekRolledOver) {
+      for (final sub in _groupMemberSubscriptions.values) {
+        sub.cancel();
+      }
+      _groupMemberSubscriptions.clear();
+      _groupMembersById.clear();
+    }
+    _subscribedGroupWeekKey = weekKey;
+
     for (final group in groups) {
       if (_groupMemberSubscriptions.containsKey(group.id)) continue;
       _groupMemberSubscriptions[group.id] = repo
@@ -608,6 +663,7 @@ class NearPaceController extends ChangeNotifier {
     _groupMemberSubscriptions.clear();
     _userGroups.clear();
     _groupMembersById.clear();
+    _subscribedGroupWeekKey = null;
   }
 
   void _subscribeToLeaderboard() {
@@ -673,8 +729,9 @@ class NearPaceController extends ChangeNotifier {
 
   double? get weeklyAvgPaceSecPerKm {
     final distanceM = weeklyDistanceMeters;
-    if (distanceM < 50) return null;
-    return weeklyDuration.inSeconds / (distanceM / 1000.0);
+    final durationS = weeklyDuration.inSeconds;
+    if (distanceM < 50 || durationS <= 0) return null;
+    return durationS / (distanceM / 1000.0);
   }
 
   /// Distance in metres for each day of the current ISO week (index 0 = Monday).
@@ -731,12 +788,8 @@ class NearPaceController extends ChangeNotifier {
           avatarId: _profile.avatarId,
           city: currentLeaderboardCity,
           weekKey: currentWeekKey,
-          distanceM: weeklyPublicDistanceMeters > 0
-              ? weeklyPublicDistanceMeters
-              : weeklyDistanceMeters,
-          runCount: weeklyPublicActivities.isNotEmpty
-              ? weeklyPublicActivities.length
-              : weeklyActivities.length,
+          distanceM: weeklyPublicDistanceMeters,
+          runCount: weeklyPublicActivities.length,
           updatedAt: now,
         ),
       );
@@ -805,9 +858,9 @@ class NearPaceController extends ChangeNotifier {
           final newProfile = UserProfile(
             uid: uid,
             email: email.trim(),
-            displayName: email.contains('@')
-                ? email.split('@').first
-                : 'Runner',
+            displayName: _clampDisplayName(
+              email.contains('@') ? email.split('@').first : 'Runner',
+            ),
             city: '',
             showOnLeaderboard: false,
           );
@@ -844,9 +897,11 @@ class NearPaceController extends ChangeNotifier {
       } else {
         final uid = await authRepo.signUp(email: email, password: password);
         final trimmedName = displayName.trim();
-        final effectiveName = trimmedName.isNotEmpty
-            ? trimmedName
-            : (email.contains('@') ? email.split('@').first : 'Runner');
+        final effectiveName = _clampDisplayName(
+          trimmedName.isNotEmpty
+              ? trimmedName
+              : (email.contains('@') ? email.split('@').first : 'Runner'),
+        );
         final newProfile = UserProfile(
           uid: uid,
           email: email.trim(),
@@ -931,6 +986,11 @@ class NearPaceController extends ChangeNotifier {
     _selectedTabIndex = 0;
 
     _unsubscribeUserData();
+    _inFlightSyncIds.clear();
+    _selectedCity = null;
+    if (!_isLocalPreview) {
+      _activities.clear();
+    }
     _lastSyncedReminder = null;
     await reminderService?.cancelAll();
     foregroundService?.stop();
@@ -1017,12 +1077,8 @@ class NearPaceController extends ChangeNotifier {
       displayName: _profile.displayName,
       city: targetCity,
       weekKey: currentWeekKey,
-      distanceM: weeklyPublicDistanceMeters > 0
-          ? weeklyPublicDistanceMeters
-          : weeklyDistanceMeters,
-      runCount: weeklyPublicActivities.isNotEmpty
-          ? weeklyPublicActivities.length
-          : weeklyActivities.length,
+      distanceM: weeklyPublicDistanceMeters,
+      runCount: weeklyPublicActivities.length,
       updatedAt: now,
       avatarId: _profile.avatarId,
     );
@@ -1398,8 +1454,7 @@ class NearPaceController extends ChangeNotifier {
       }
 
       final permission = await locService.checkPermission();
-      if (permission != LocationPermissionStatus.granted &&
-          _locationPermission != LocationPermissionStatus.granted) {
+      if (permission != LocationPermissionStatus.granted) {
         _locationPermission = permission;
         _runState = RunFailed(
           'Location permission is required before starting a run.',
@@ -1459,18 +1514,18 @@ class NearPaceController extends ChangeNotifier {
       try {
         await locService.getLastKnownPosition();
       } catch (_) {}
-
-      final startedAt = DateTime.now();
-      final session = RunSession(startedAt: startedAt);
-      _activeSession = session;
+      if (_runState is! RunPreparing) return;
 
       var firstFixAcquired = false;
       _positionSubscription = locService.positionStream().listen(
         (point) {
           if (!firstFixAcquired) {
             firstFixAcquired = true;
+            _gpsHintTimer?.cancel();
+            _gpsHintTimer = null;
             unawaited(preCacheWeatherForecast(point));
             if (_runState is RunPreparing) {
+              _activeSession = RunSession(startedAt: DateTime.now());
               _runState = const RunActive(paused: false);
               _startRunTimer();
               unawaited(
@@ -1493,6 +1548,8 @@ class NearPaceController extends ChangeNotifier {
           }
         },
         onError: (error) {
+          _gpsHintTimer?.cancel();
+          _gpsHintTimer = null;
           _runState = RunFailed('GPS stream error: $error');
           notifyListeners();
         },
@@ -1501,8 +1558,10 @@ class NearPaceController extends ChangeNotifier {
       if (acquireDelay > Duration.zero) {
         await Future<void>.delayed(acquireDelay);
       }
+      if (_runState is! RunPreparing || firstFixAcquired) return;
       // Gentle status update rather than mapping timeout to failure
-      Timer(const Duration(seconds: 10), () {
+      _gpsHintTimer?.cancel();
+      _gpsHintTimer = Timer(const Duration(seconds: 10), () {
         if (_runState is RunPreparing && !firstFixAcquired) {
           _runState = const RunPreparing(
             message:
@@ -1539,6 +1598,14 @@ class NearPaceController extends ChangeNotifier {
     if (session == null || _runState is! RunActive) return;
     session.resume(DateTime.now());
     _runState = const RunActive(paused: false);
+    if (_positionSubscription == null &&
+        !_isLocalPreview &&
+        locationService != null) {
+      _listenToDevicePositionStream();
+    }
+    if (_runTickTimer == null) {
+      _startRunTimer();
+    }
     _updateForegroundNotification();
     _saveActiveCheckpoint();
     notifyListeners();
@@ -1660,7 +1727,10 @@ class NearPaceController extends ChangeNotifier {
       notifyListeners();
       try {
         if (_isOffline) {
-          await pendingSyncStorage?.addPendingActivity(activityToSave);
+          await pendingSyncStorage?.addPendingActivity(
+            activityToSave,
+            uid: _pendingSyncUid,
+          );
         } else {
           try {
             final savedId = await actRepo.saveActivity(
@@ -1676,7 +1746,10 @@ class NearPaceController extends ChangeNotifier {
                 pendingSync: false,
               );
             }
-            await pendingSyncStorage?.removePendingActivity(activityToSave.id);
+            await pendingSyncStorage?.removePendingActivity(
+              activityToSave.id,
+              uid: _pendingSyncUid,
+            );
 
             if (activity.isPublic) {
               if (!_profile.showOnLeaderboard) {
@@ -1696,7 +1769,10 @@ class NearPaceController extends ChangeNotifier {
             if (idx >= 0) {
               _activities[idx] = pendingAct;
             }
-            await pendingSyncStorage?.addPendingActivity(pendingAct);
+            await pendingSyncStorage?.addPendingActivity(
+              pendingAct,
+              uid: _pendingSyncUid,
+            );
           }
         }
       } finally {
@@ -1705,7 +1781,10 @@ class NearPaceController extends ChangeNotifier {
       }
     } else {
       if (activityToSave.pendingSync) {
-        await pendingSyncStorage?.addPendingActivity(activityToSave);
+        await pendingSyncStorage?.addPendingActivity(
+          activityToSave,
+          uid: _pendingSyncUid,
+        );
       } else {
         await _syncAllGroupMemberStats();
       }
@@ -1714,6 +1793,7 @@ class NearPaceController extends ChangeNotifier {
 
   Future<int> syncPendingActivities({bool force = false}) async {
     if (_isSyncingActivities) return 0;
+    if (!_isLocalPreview && !_isSignedIn) return 0;
 
     final conn = connectivityService;
     if (conn != null) {
@@ -1726,9 +1806,13 @@ class NearPaceController extends ChangeNotifier {
     notifyListeners();
 
     var syncedCount = 0;
+    var syncedAnyPublic = false;
+    String? latestPublicCity;
     try {
+      final syncUid = _pendingSyncUid;
       final queue =
-          await pendingSyncStorage?.getPendingActivities() ?? const [];
+          await pendingSyncStorage?.getPendingActivities(uid: syncUid) ??
+          const [];
       final pendingInMemory = _activities.where((a) => a.pendingSync).toList();
       final allPending = <String, Activity>{};
       for (final a in queue) {
@@ -1760,38 +1844,71 @@ class NearPaceController extends ChangeNotifier {
           }
         }
 
-        if (actRepo != null && _profile.uid.isNotEmpty) {
-          try {
-            final savedId = await actRepo.saveActivity(
-              _profile.uid,
-              currentActivity.copyWith(pendingSync: false),
-            );
-            await pendingSyncStorage?.removePendingActivity(activity.id);
+        _inFlightSyncIds.add(activity.id);
+        try {
+          if (actRepo != null && _profile.uid.isNotEmpty) {
+            try {
+              final savedId = await actRepo.saveActivity(
+                _profile.uid,
+                currentActivity.copyWith(pendingSync: false),
+              );
+              await pendingSyncStorage?.removePendingActivity(
+                activity.id,
+                uid: syncUid,
+              );
 
+              final idx = _activities.indexWhere((a) => a.id == activity.id);
+              if (idx >= 0) {
+                _activities[idx] = currentActivity.copyWith(
+                  id: savedId,
+                  pendingSync: false,
+                );
+              }
+              if (currentActivity.isPublic) {
+                syncedAnyPublic = true;
+                final c = currentActivity.city?.trim();
+                if (c != null && c.isNotEmpty) {
+                  latestPublicCity = c;
+                }
+              }
+              syncedCount++;
+            } catch (_) {
+              // Keep pending for next retry
+            }
+          } else {
+            await pendingSyncStorage?.removePendingActivity(
+              activity.id,
+              uid: syncUid,
+            );
             final idx = _activities.indexWhere((a) => a.id == activity.id);
             if (idx >= 0) {
-              _activities[idx] = currentActivity.copyWith(
-                id: savedId,
-                pendingSync: false,
-              );
+              _activities[idx] = currentActivity.copyWith(pendingSync: false);
+            }
+            if (currentActivity.isPublic) {
+              syncedAnyPublic = true;
+              final c = currentActivity.city?.trim();
+              if (c != null && c.isNotEmpty) {
+                latestPublicCity = c;
+              }
             }
             syncedCount++;
-          } catch (_) {
-            // Keep pending for next retry
           }
-        } else {
-          await pendingSyncStorage?.removePendingActivity(activity.id);
-          final idx = _activities.indexWhere((a) => a.id == activity.id);
-          if (idx >= 0) {
-            _activities[idx] = currentActivity.copyWith(pendingSync: false);
-          }
-          syncedCount++;
+        } finally {
+          _inFlightSyncIds.remove(activity.id);
         }
       }
 
       if (syncedCount > 0) {
+        if (syncedAnyPublic && !_profile.showOnLeaderboard) {
+          _profile = _profile.copyWith(showOnLeaderboard: true);
+          if (!_isLocalPreview && _profile.uid.isNotEmpty) {
+            unawaited(
+              profileRepository?.setShowOnLeaderboard(_profile.uid, true),
+            );
+          }
+        }
         if (_profile.showOnLeaderboard) {
-          await _syncLeaderboardEntry();
+          await _syncLeaderboardEntry(runCity: latestPublicCity);
         }
         await _syncAllGroupMemberStats();
       }
@@ -1804,17 +1921,24 @@ class NearPaceController extends ChangeNotifier {
   }
 
   Future<void> deleteActivity(String id) async {
+    final wasPending = _activities.any((a) => a.id == id && a.pendingSync);
     _activities.removeWhere((a) => a.id == id);
     notifyListeners();
 
+    await pendingSyncStorage?.removePendingActivity(id, uid: _pendingSyncUid);
+
     final actRepo = activityRepository;
     if (!_isLocalPreview && actRepo != null && _profile.uid.isNotEmpty) {
-      await actRepo.deleteActivity(_profile.uid, id);
-      if (_profile.showOnLeaderboard) {
+      if (!(_isOffline && wasPending)) {
+        await actRepo.deleteActivity(_profile.uid, id);
+      }
+      if (_profile.showOnLeaderboard && !_isOffline) {
         await _syncLeaderboardEntry();
       }
     }
-    await _syncAllGroupMemberStats();
+    if (!_isOffline) {
+      await _syncAllGroupMemberStats();
+    }
   }
 
   void _startRunTimer() {
@@ -1870,6 +1994,8 @@ class NearPaceController extends ChangeNotifier {
   void _cancelRunTimer() {
     _runTickTimer?.cancel();
     _runTickTimer = null;
+    _gpsHintTimer?.cancel();
+    _gpsHintTimer = null;
     _tickCount = 0;
   }
 

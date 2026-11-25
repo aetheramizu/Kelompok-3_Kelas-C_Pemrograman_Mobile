@@ -2,6 +2,28 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+/// Categorized error codes for circle operations.
+enum GroupErrorCode {
+  invalidCode,
+  notFound,
+  alreadyMember,
+  groupFull,
+  permissionDenied,
+  invalidInput,
+  unknown,
+}
+
+/// Typed domain exception thrown by circle/group operations.
+class GroupRepositoryException implements Exception {
+  const GroupRepositoryException(this.code, this.message);
+
+  final GroupErrorCode code;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Alphabet for 6-character circle invite codes (uppercase letters and digits,
 /// excluding ambiguous characters `0`, `O`, `1`, and `I`).
 const String kInviteCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

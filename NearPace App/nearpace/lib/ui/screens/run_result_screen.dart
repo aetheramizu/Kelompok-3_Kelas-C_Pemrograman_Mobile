@@ -159,19 +159,22 @@ class _RunResultScreenState extends State<RunResultScreen> {
 
       await controller.saveActivity(activityToSave);
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            controller.isLocalPreview
-                ? (_isPublic
-                      ? 'Run saved and posted to leaderboard.'
-                      : 'Run saved privately to history.')
-                : (_isPublic
-                      ? 'Run saved and posted to $effectiveCity leaderboard!'
-                      : 'Run saved privately to your history.'),
-          ),
-        ),
+      final savedPending = controller.activities.any(
+        (a) => a.id == activityToSave.id && a.pendingSync,
       );
+      final String savedMessage;
+      if (controller.isOffline || savedPending) {
+        savedMessage = 'Run saved locally — will sync when online.';
+      } else if (controller.isLocalPreview) {
+        savedMessage = _isPublic
+            ? 'Run saved and posted to leaderboard.'
+            : 'Run saved privately to history.';
+      } else {
+        savedMessage = _isPublic
+            ? 'Run saved and posted to $effectiveCity leaderboard!'
+            : 'Run saved privately to your history.';
+      }
+      messenger.showSnackBar(SnackBar(content: Text(savedMessage)));
       nav.pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -228,8 +231,13 @@ class _RunResultScreenState extends State<RunResultScreen> {
             IconButton(
               tooltip: 'Share run',
               icon: const Icon(Icons.share_outlined),
-              onPressed: () =>
-                  ShareActivitySheet.show(context, activity: activity),
+              onPressed: () {
+                final cityInput = _cityController.text.trim();
+                final shareActivity = cityInput.isNotEmpty
+                    ? activity.copyWith(city: cityInput)
+                    : activity;
+                ShareActivitySheet.show(context, activity: shareActivity);
+              },
             ),
             if (!isUnsaved)
               IconButton(
@@ -457,6 +465,7 @@ class _RunResultScreenState extends State<RunResultScreen> {
                                         ),
                                         TextFormField(
                                           controller: _cityController,
+                                          maxLength: 60,
                                           decoration: InputDecoration(
                                             labelText: 'Kota Daerah Lari (Leaderboard)',
                                             hintText: 'e.g. Makassar, Jakarta, Surabaya',

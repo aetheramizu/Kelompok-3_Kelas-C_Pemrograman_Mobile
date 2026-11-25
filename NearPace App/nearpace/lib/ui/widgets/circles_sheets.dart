@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/repositories/group_repository.dart';
 import '../../domain/run_group.dart';
 import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';

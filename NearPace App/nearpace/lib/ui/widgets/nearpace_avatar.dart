@@ -469,7 +469,7 @@ class _AvatarPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(w * 0.2, h * 0.78, w * 0.6, h * 0.05), p);
 
     // Face in night tone
-    p.color = const Offset(1, 1).dx > 0 ? cLight : cLight;
+    p.color = cLight;
     canvas.drawCircle(Offset(w * 0.5, h * 0.44), w * 0.24, p);
 
     // Night goggles

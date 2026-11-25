@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
@@ -44,6 +45,20 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
   final WeatherCacheService? cacheService;
 
   static const String _baseUrl = 'https://api.open-meteo.com/v1/forecast';
+  static final RegExp _timezoneSuffixPattern = RegExp(
+    r'(Z|[+-]\d{2}:?\d{2})$',
+    caseSensitive: false,
+  );
+
+  /// Open-Meteo emits GMT/UTC ISO-8601 timestamps without a trailing `Z`
+  /// (e.g. `2026-11-25T02:00`). Append `Z` when no offset is present so
+  /// `DateTime.tryParse` never misinterprets UTC hours as local device time.
+  static DateTime? parseOpenMeteoUtcTime(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final hasZone = _timezoneSuffixPattern.hasMatch(trimmed);
+    return DateTime.tryParse(hasZone ? trimmed : '${trimmed}Z')?.toUtc();
+  }
 
   @override
   Future<WeatherSnapshot?> fetchCurrentWeather(
@@ -56,6 +71,7 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
           'latitude': startPoint.latitude.toString(),
           'longitude': startPoint.longitude.toString(),
           'current': 'temperature_2m,apparent_temperature,weather_code',
+          'timezone': 'UTC',
         },
       );
 
@@ -109,6 +125,7 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
           'longitude': startPoint.longitude.toString(),
           'hourly': 'temperature_2m,apparent_temperature,weather_code',
           'forecast_days': '2',
+          'timezone': 'UTC',
         },
       );
 
@@ -120,18 +137,40 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
       final hourly = decoded['hourly'];
       if (hourly is! Map<String, dynamic>) return;
 
-      final times = (hourly['time'] as List<dynamic>? ?? [])
-          .map((t) => DateTime.tryParse(t.toString()) ?? DateTime.now())
-          .toList();
-      final temps = (hourly['temperature_2m'] as List<dynamic>? ?? [])
-          .map((v) => (v as num).toDouble())
-          .toList();
-      final apparents = (hourly['apparent_temperature'] as List<dynamic>? ?? [])
-          .map((v) => (v as num).toDouble())
-          .toList();
-      final codes = (hourly['weather_code'] as List<dynamic>? ?? [])
-          .map((v) => (v as num).toInt())
-          .toList();
+      final rawTimes = hourly['time'] as List<dynamic>? ?? const [];
+      final rawTemps = hourly['temperature_2m'] as List<dynamic>? ?? const [];
+      final rawApparents =
+          hourly['apparent_temperature'] as List<dynamic>? ?? const [];
+      final rawCodes = hourly['weather_code'] as List<dynamic>? ?? const [];
+
+      final count = [
+        rawTimes.length,
+        rawTemps.length,
+        rawApparents.length,
+        rawCodes.length,
+      ].reduce(math.min);
+
+      final times = <DateTime>[];
+      final temps = <double>[];
+      final apparents = <double>[];
+      final codes = <int>[];
+
+      for (var i = 0; i < count; i++) {
+        final parsedTime = parseOpenMeteoUtcTime(rawTimes[i].toString());
+        final temp = rawTemps[i];
+        final apparent = rawApparents[i];
+        final code = rawCodes[i];
+        if (parsedTime == null ||
+            temp is! num ||
+            apparent is! num ||
+            code is! num) {
+          continue;
+        }
+        times.add(parsedTime);
+        temps.add(temp.toDouble());
+        apparents.add(apparent.toDouble());
+        codes.add(code.toInt());
+      }
 
       if (times.isNotEmpty) {
         await cache.saveHourlyForecast(
@@ -173,6 +212,7 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
           'longitude': startPoint.longitude.toString(),
           'past_days': '7',
           'hourly': 'temperature_2m,apparent_temperature,weather_code',
+          'timezone': 'UTC',
         },
       );
 
@@ -184,19 +224,30 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
       final hourly = decoded['hourly'];
       if (hourly is! Map<String, dynamic>) return null;
 
-      final times = (hourly['time'] as List<dynamic>? ?? []);
-      final temps = (hourly['temperature_2m'] as List<dynamic>? ?? []);
+      final times = hourly['time'] as List<dynamic>? ?? const [];
+      final temps = hourly['temperature_2m'] as List<dynamic>? ?? const [];
       final apparents =
-          (hourly['apparent_temperature'] as List<dynamic>? ?? []);
-      final codes = (hourly['weather_code'] as List<dynamic>? ?? []);
+          hourly['apparent_temperature'] as List<dynamic>? ?? const [];
+      final codes = hourly['weather_code'] as List<dynamic>? ?? const [];
+
+      final count = [
+        times.length,
+        temps.length,
+        apparents.length,
+        codes.length,
+      ].reduce(math.min);
+      if (count == 0) return null;
 
       final targetUtc = runTime.toUtc();
       int? bestIndex;
       var minDiffMs = double.infinity;
 
-      for (var i = 0; i < times.length; i++) {
-        final t = DateTime.tryParse(times[i].toString());
+      for (var i = 0; i < count; i++) {
+        final t = parseOpenMeteoUtcTime(times[i].toString());
         if (t == null) continue;
+        if (temps[i] is! num || apparents[i] is! num || codes[i] is! num) {
+          continue;
+        }
         final diff =
             (t.millisecondsSinceEpoch - targetUtc.millisecondsSinceEpoch).abs();
         if (diff < minDiffMs) {
@@ -210,10 +261,9 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
         return null;
       }
 
-      final temp = temps[bestIndex];
-      final apparent = apparents[bestIndex];
-      final code = codes[bestIndex];
-      if (temp is! num || apparent is! num || code is! num) return null;
+      final temp = temps[bestIndex] as num;
+      final apparent = apparents[bestIndex] as num;
+      final code = codes[bestIndex] as num;
 
       return WeatherSnapshot(
         temperatureC: temp.toDouble(),

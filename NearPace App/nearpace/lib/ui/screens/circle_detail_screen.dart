@@ -29,6 +29,7 @@ class CircleDetailScreen extends StatefulWidget {
 
 class _CircleDetailScreenState extends State<CircleDetailScreen> {
   bool _isMutating = false;
+  bool _hadGroupInController = false;
 
   Future<void> _copyInviteCode(RunGroup group) async {
     await Clipboard.setData(ClipboardData(text: group.inviteCode));
@@ -141,7 +142,12 @@ class _CircleDetailScreenState extends State<CircleDetailScreen> {
     final controller = context.watch<NearPaceController>();
     final colors = context.npColors;
     final textTheme = Theme.of(context).textTheme;
-    final group = controller.groupById(widget.groupId) ?? widget.initialGroup;
+    final liveGroup = controller.groupById(widget.groupId);
+    if (liveGroup != null) {
+      _hadGroupInController = true;
+    }
+    final group =
+        liveGroup ?? (_hadGroupInController ? null : widget.initialGroup);
 
     if (group == null) {
       return Scaffold(

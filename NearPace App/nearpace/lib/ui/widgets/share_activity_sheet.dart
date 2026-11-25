@@ -52,8 +52,12 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
       if (boundary == null) return null;
 
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData?.buffer.asUint8List();
+      try {
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        return byteData?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
     } catch (_) {
       return null;
     }
@@ -79,6 +83,13 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
       );
       if (mounted) {
         setState(() => _statusNotice = 'Saved to Gallery successfully!');
+      }
+    } on GalException catch (e) {
+      if (mounted) {
+        final message = e.type == GalExceptionType.permissionDenied
+            ? 'Gallery permission denied. Allow photo access in Settings to save.'
+            : 'Unable to save image: ${e.type.message}';
+        setState(() => _statusNotice = message);
       }
     } catch (e) {
       if (mounted) {

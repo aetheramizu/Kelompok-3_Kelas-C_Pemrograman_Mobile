@@ -26,21 +26,31 @@ class NearPaceSyncCoordinator implements SyncCoordinator {
   StreamSubscription<bool>? _connectivitySub;
   bool _isOnline = true;
   bool _isSyncing = false;
+  bool _disposed = false;
 
   final StreamController<bool> _onlineStreamController =
       StreamController<bool>.broadcast();
 
+  void _emitOnline(bool value) {
+    if (!_disposed && !_onlineStreamController.isClosed) {
+      _onlineStreamController.add(value);
+    }
+  }
+
   Future<void> _init() async {
-    _isOnline = await _connectivity.checkOnline();
-    _onlineStreamController.add(_isOnline);
+    final online = await _connectivity.checkOnline();
+    if (_disposed) return;
+    _isOnline = online;
+    _emitOnline(_isOnline);
 
     _connectivitySub = _connectivity.onConnectivityChanged.listen((online) {
+      if (_disposed) return;
       final wasOffline = !_isOnline;
       _isOnline = online;
-      _onlineStreamController.add(online);
+      _emitOnline(online);
 
       if (wasOffline && online) {
-        // Automatically sync when internet reconnects
+        // Automatically sync when internet reconnects.
         unawaited(syncPending());
       }
     });
@@ -54,7 +64,7 @@ class NearPaceSyncCoordinator implements SyncCoordinator {
 
   @override
   Future<int> syncPending() async {
-    if (_isSyncing) return 0;
+    if (_disposed || _isSyncing) return 0;
     _isSyncing = true;
     try {
       return await _syncHandler();
@@ -65,13 +75,15 @@ class NearPaceSyncCoordinator implements SyncCoordinator {
 
   @override
   void onAppResumed() {
+    if (_disposed) return;
     unawaited(_handleAppResumed());
   }
 
   Future<void> _handleAppResumed() async {
     final online = await _connectivity.checkOnline();
+    if (_disposed) return;
     _isOnline = online;
-    _onlineStreamController.add(online);
+    _emitOnline(online);
     if (online) {
       await syncPending();
     }
@@ -79,7 +91,10 @@ class NearPaceSyncCoordinator implements SyncCoordinator {
 
   @override
   void dispose() {
+    _disposed = true;
     _connectivitySub?.cancel();
-    _onlineStreamController.close();
+    if (!_onlineStreamController.isClosed) {
+      _onlineStreamController.close();
+    }
   }
 }

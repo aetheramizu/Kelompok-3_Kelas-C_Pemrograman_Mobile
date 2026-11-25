@@ -6,11 +6,11 @@ import '../domain/activity.dart';
 
 /// Contract for persisting offline activities waiting to be synced to Firestore.
 abstract interface class PendingSyncStorage {
-  Future<List<Activity>> getPendingActivities();
-  Future<void> addPendingActivity(Activity activity);
-  Future<void> removePendingActivity(String activityId);
-  Future<void> updatePendingActivity(Activity activity);
-  Future<void> clear();
+  Future<List<Activity>> getPendingActivities({String? uid});
+  Future<void> addPendingActivity(Activity activity, {String? uid});
+  Future<void> removePendingActivity(String activityId, {String? uid});
+  Future<void> updatePendingActivity(Activity activity, {String? uid});
+  Future<void> clear({String? uid});
 }
 
 /// SharedPreferences implementation of [PendingSyncStorage].
@@ -21,6 +21,12 @@ class PreferencesPendingSyncStorage implements PendingSyncStorage {
   SharedPreferences? _prefs;
   static const String _storageKey = 'nearpace_pending_sync_queue';
 
+  String _keyForUid(String? uid) {
+    final trimmed = uid?.trim();
+    if (trimmed == null || trimmed.isEmpty) return _storageKey;
+    return '${_storageKey}_$trimmed';
+  }
+
   Future<SharedPreferences> _getPrefs() async {
     final existing = _prefs;
     if (existing != null) return existing;
@@ -30,23 +36,30 @@ class PreferencesPendingSyncStorage implements PendingSyncStorage {
   }
 
   @override
-  Future<List<Activity>> getPendingActivities() async {
+  Future<List<Activity>> getPendingActivities({String? uid}) async {
     final prefs = await _getPrefs();
-    final raw = prefs.getString(_storageKey);
+    final raw = prefs.getString(_keyForUid(uid));
     if (raw == null || raw.isEmpty) return const [];
     try {
       final decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded
-          .map((item) => Activity.fromMap(item as Map<String, dynamic>))
-          .toList();
+      final activities = <Activity>[];
+      for (final item in decoded) {
+        if (item is! Map<String, dynamic>) continue;
+        try {
+          activities.add(Activity.fromMap(item));
+        } catch (_) {
+          // Skip malformed entries rather than dropping the entire queue.
+        }
+      }
+      return activities;
     } catch (_) {
       return const [];
     }
   }
 
   @override
-  Future<void> addPendingActivity(Activity activity) async {
-    final list = await getPendingActivities();
+  Future<void> addPendingActivity(Activity activity, {String? uid}) async {
+    final list = await getPendingActivities(uid: uid);
     final index = list.indexWhere((a) => a.id == activity.id);
     final updated = List<Activity>.from(list);
     if (index >= 0) {
@@ -54,65 +67,88 @@ class PreferencesPendingSyncStorage implements PendingSyncStorage {
     } else {
       updated.add(activity);
     }
-    await _saveList(updated);
+    await _saveList(updated, uid: uid);
   }
 
   @override
-  Future<void> removePendingActivity(String activityId) async {
-    final list = await getPendingActivities();
+  Future<void> removePendingActivity(String activityId, {String? uid}) async {
+    final list = await getPendingActivities(uid: uid);
     final updated = list.where((a) => a.id != activityId).toList();
-    await _saveList(updated);
+    await _saveList(updated, uid: uid);
   }
 
   @override
-  Future<void> updatePendingActivity(Activity activity) async {
-    await addPendingActivity(activity);
+  Future<void> updatePendingActivity(Activity activity, {String? uid}) async {
+    await addPendingActivity(activity, uid: uid);
   }
 
   @override
-  Future<void> clear() async {
+  Future<void> clear({String? uid}) async {
     final prefs = await _getPrefs();
-    await prefs.remove(_storageKey);
+    await prefs.remove(_keyForUid(uid));
   }
 
-  Future<void> _saveList(List<Activity> list) async {
+  Future<void> _saveList(List<Activity> list, {String? uid}) async {
     final prefs = await _getPrefs();
     final serialized = jsonEncode(list.map((a) => a.toMap()).toList());
-    await prefs.setString(_storageKey, serialized);
+    await prefs.setString(_keyForUid(uid), serialized);
   }
 }
 
 /// In-memory implementation of [PendingSyncStorage] for tests.
 class InMemoryPendingSyncStorage implements PendingSyncStorage {
-  InMemoryPendingSyncStorage({List<Activity>? initial})
-    : _storage = Map.fromEntries(
-        (initial ?? const []).map((a) => MapEntry(a.id, a)),
-      );
+  InMemoryPendingSyncStorage({List<Activity>? initial, String? initialUid}) {
+    final initialList = initial ?? const <Activity>[];
+    if (initialList.isNotEmpty) {
+      final bucket = _bucketFor(initialUid);
+      for (final a in initialList) {
+        bucket[a.id] = a;
+      }
+    }
+  }
 
-  final Map<String, Activity> _storage;
+  final Map<String, Map<String, Activity>> _buckets = {};
 
-  @override
-  Future<List<Activity>> getPendingActivities() async {
-    return _storage.values.toList();
+  Map<String, Activity> _bucketFor(String? uid) {
+    final key = uid?.trim() ?? '';
+    return _buckets.putIfAbsent(key, () => <String, Activity>{});
   }
 
   @override
-  Future<void> addPendingActivity(Activity activity) async {
-    _storage[activity.id] = activity;
+  Future<List<Activity>> getPendingActivities({String? uid}) async {
+    if (uid != null && uid.trim().isNotEmpty) {
+      return _bucketFor(uid).values.toList();
+    }
+    return _buckets.values.expand((bucket) => bucket.values).toList();
   }
 
   @override
-  Future<void> removePendingActivity(String activityId) async {
-    _storage.remove(activityId);
+  Future<void> addPendingActivity(Activity activity, {String? uid}) async {
+    _bucketFor(uid)[activity.id] = activity;
   }
 
   @override
-  Future<void> updatePendingActivity(Activity activity) async {
-    _storage[activity.id] = activity;
+  Future<void> removePendingActivity(String activityId, {String? uid}) async {
+    if (uid != null && uid.trim().isNotEmpty) {
+      _bucketFor(uid).remove(activityId);
+      return;
+    }
+    for (final bucket in _buckets.values) {
+      bucket.remove(activityId);
+    }
   }
 
   @override
-  Future<void> clear() async {
-    _storage.clear();
+  Future<void> updatePendingActivity(Activity activity, {String? uid}) async {
+    _bucketFor(uid)[activity.id] = activity;
+  }
+
+  @override
+  Future<void> clear({String? uid}) async {
+    if (uid == null || uid.trim().isEmpty) {
+      _buckets.clear();
+    } else {
+      _bucketFor(uid).clear();
+    }
   }
 }

@@ -40,6 +40,7 @@ abstract interface class RunForegroundService {
     required bool isPaused,
   });
   Future<void> stop();
+  Future<void> launchApp();
   void setActionListener(void Function(String action) onAction);
 }
 
@@ -170,6 +171,16 @@ class FlutterForegroundRunService implements RunForegroundService {
   }
 
   @override
+  Future<void> launchApp() async {
+    if (kIsWeb) return;
+    try {
+      FlutterForegroundTask.launchApp();
+    } catch (_) {
+      // Degrade gracefully on headless/test hosts
+    }
+  }
+
+  @override
   void setActionListener(void Function(String action) onAction) {
     _actionListener = onAction;
   }
@@ -178,6 +189,10 @@ class FlutterForegroundRunService implements RunForegroundService {
 /// No-op fallback implementation of [RunForegroundService] for tests and web.
 class NoopRunForegroundService implements RunForegroundService {
   void Function(String action)? _actionListener;
+  int startCount = 0;
+  int updateCount = 0;
+  int stopCount = 0;
+  int launchAppCount = 0;
 
   @override
   Future<void> initialize() async {}
@@ -187,17 +202,28 @@ class NoopRunForegroundService implements RunForegroundService {
     required String title,
     required String text,
     required bool isPaused,
-  }) async {}
+  }) async {
+    startCount++;
+  }
 
   @override
   Future<void> update({
     required String title,
     required String text,
     required bool isPaused,
-  }) async {}
+  }) async {
+    updateCount++;
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stopCount++;
+  }
+
+  @override
+  Future<void> launchApp() async {
+    launchAppCount++;
+  }
 
   @override
   void setActionListener(void Function(String action) onAction) {

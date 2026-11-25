@@ -39,10 +39,11 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
     final docId = '${entry.weekKey}_${entry.uid}';
     final data = <String, dynamic>{
       'uid': entry.uid,
-      'displayName': entry.displayName.trim().isEmpty
-          ? 'Runner'
-          : entry.displayName.trim(),
-      'city': entry.city.trim(),
+      'displayName': _clampText(
+        entry.displayName.trim().isEmpty ? 'Runner' : entry.displayName.trim(),
+        40,
+      ),
+      'city': _clampText(entry.city.trim(), 60),
       'weekKey': entry.weekKey,
       'distanceM': entry.distanceM,
       'runCount': entry.runCount,
@@ -61,8 +62,15 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
     required String uid,
   }) async {
     final docId = '${weekKey}_$uid';
-    await _leaderboardCol.doc(docId).delete();
+    try {
+      await _leaderboardCol.doc(docId).delete();
+    } on FirebaseException catch (e) {
+      if (e.code != 'not-found') rethrow;
+    }
   }
+
+  static String _clampText(String value, int maxLen) =>
+      value.length <= maxLen ? value : value.substring(0, maxLen);
 
   static LeaderboardEntry _entryFromFirestore(Map<String, dynamic> map) {
     final rawUpdated = map['updatedAt'];

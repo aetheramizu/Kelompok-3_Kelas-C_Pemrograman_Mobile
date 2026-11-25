@@ -87,6 +87,32 @@ class _CityPickerSheetState extends State<CityPickerSheet> {
 
       GeoPointLite? position;
       if (locService != null) {
+        final serviceEnabled = await locService.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (mounted) {
+            setState(() {
+              _gpsMessage = 'Location services are disabled. Enable GPS or select a city manually.';
+            });
+          }
+          return;
+        }
+
+        var permission = await locService.checkPermission();
+        if (permission == LocationPermissionStatus.notRequested ||
+            permission == LocationPermissionStatus.denied) {
+          permission = await locService.requestPermission();
+        }
+        if (permission != LocationPermissionStatus.granted) {
+          if (mounted) {
+            setState(() {
+              _gpsMessage = permission == LocationPermissionStatus.deniedForever
+                  ? 'Location permission is permanently denied. Select a city manually or enable GPS in Settings.'
+                  : 'Location permission is required for GPS city detection.';
+            });
+          }
+          return;
+        }
+
         position = await locService.getLastKnownPosition();
         if (position == null) {
           // Listen to first stream point

@@ -5,27 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/run_group.dart';
 
-/// Categorized error codes for circle operations.
-enum GroupErrorCode {
-  invalidCode,
-  notFound,
-  alreadyMember,
-  groupFull,
-  permissionDenied,
-  invalidInput,
-  unknown,
-}
-
-/// Typed exception thrown by [GroupRepository] implementations.
-class GroupRepositoryException implements Exception {
-  const GroupRepositoryException(this.code, this.message);
-
-  final GroupErrorCode code;
-  final String message;
-
-  @override
-  String toString() => message;
-}
+export '../../domain/run_group.dart'
+    show GroupErrorCode, GroupRepositoryException;
 
 /// Contract for running circles / groups at `groups/{groupId}` and weekly
 /// member rankings at `groups/{groupId}/members/{uid}`.
@@ -247,12 +228,27 @@ class FirestoreGroupRepository implements GroupRepository {
       );
     }
 
-    await _groupsCol
-        .doc(group.id)
-        .update(<String, dynamic>{
-          'memberUids': FieldValue.arrayUnion(<String>[uid]),
-        })
-        .timeout(const Duration(seconds: 8));
+    try {
+      await _groupsCol
+          .doc(group.id)
+          .update(<String, dynamic>{
+            'memberUids': FieldValue.arrayUnion(<String>[uid]),
+          })
+          .timeout(const Duration(seconds: 8));
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw GroupRepositoryException(
+          GroupErrorCode.groupFull,
+          'Could not join this circle — it may have reached its member limit.',
+        );
+      }
+      throw _mapFirebaseException(e, fallback: 'Could not join circle.');
+    } on TimeoutException {
+      throw const GroupRepositoryException(
+        GroupErrorCode.unknown,
+        'Joining circle timed out. Check your connection and try again.',
+      );
+    }
 
     final member = GroupMemberRank(
       uid: uid,
@@ -328,14 +324,24 @@ class FirestoreGroupRepository implements GroupRepository {
       );
     }
 
-    final memberDocs = await _membersCol(groupId)
-        .get()
-        .timeout(const Duration(seconds: 8));
-    for (final memberDoc in memberDocs.docs) {
-      await memberDoc.reference.delete().timeout(const Duration(seconds: 6));
+    try {
+      final memberDocs = await _membersCol(groupId)
+          .get()
+          .timeout(const Duration(seconds: 8));
+      final batch = _firestore.batch();
+      for (final memberDoc in memberDocs.docs) {
+        batch.delete(memberDoc.reference);
+      }
+      batch.delete(_groupsCol.doc(groupId));
+      await batch.commit().timeout(const Duration(seconds: 8));
+    } on FirebaseException catch (e) {
+      throw _mapFirebaseException(e, fallback: 'Could not delete circle.');
+    } on TimeoutException {
+      throw const GroupRepositoryException(
+        GroupErrorCode.unknown,
+        'Deleting circle timed out. Check your connection and try again.',
+      );
     }
-
-    await _groupsCol.doc(groupId).delete().timeout(const Duration(seconds: 8));
   }
 
   @override
@@ -345,9 +351,7 @@ class FirestoreGroupRepository implements GroupRepository {
   }) async {
     final data = <String, dynamic>{
       'uid': member.uid,
-      'displayName': member.displayName.trim().isEmpty
-          ? 'Runner'
-          : member.displayName.trim(),
+      'displayName': _sanitizeDisplayName(member.displayName),
       if (member.avatarId != null) 'avatarId': member.avatarId,
       'weekKey': member.weekKey,
       'distanceM': member.distanceM,
@@ -770,4 +774,32 @@ void _sortMembers(List<GroupMemberRank> members) {
     if (distCmp != 0) return distCmp;
     return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
   });
+}
+
+String _sanitizeDisplayName(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return 'Runner';
+  return trimmed.length <= 40 ? trimmed : trimmed.substring(0, 40);
+}
+
+GroupRepositoryException _mapFirebaseException(
+  FirebaseException e, {
+  required String fallback,
+}) {
+  if (e.code == 'permission-denied') {
+    return const GroupRepositoryException(
+      GroupErrorCode.permissionDenied,
+      'You do not have permission to perform this circle action.',
+    );
+  }
+  if (e.code == 'not-found') {
+    return const GroupRepositoryException(
+      GroupErrorCode.notFound,
+      'Circle no longer exists.',
+    );
+  }
+  return GroupRepositoryException(
+    GroupErrorCode.unknown,
+    e.message?.isNotEmpty == true ? e.message! : fallback,
+  );
 }

@@ -87,6 +87,8 @@ class NearPaceMockData {
           code: 1,
           fetchedAt: run1Start,
         ),
+        isPublic: true,
+        city: 'Makassar',
       ),
       Activity(
         id: 'act-002',
@@ -116,6 +118,8 @@ class NearPaceMockData {
           code: 2,
           fetchedAt: run2Start,
         ),
+        isPublic: true,
+        city: 'Makassar',
       ),
       Activity(
         id: 'act-003',
@@ -140,6 +144,8 @@ class NearPaceMockData {
           code: 0,
           fetchedAt: run3Start,
         ),
+        isPublic: true,
+        city: 'Makassar',
       ),
       Activity(
         id: 'act-004',
