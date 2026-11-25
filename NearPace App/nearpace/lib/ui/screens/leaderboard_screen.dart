@@ -6,6 +6,7 @@ import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
+import '../widgets/circles_tab_view.dart';
 import '../widgets/nearpace_avatar.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/state_views.dart';
@@ -23,6 +24,7 @@ class LeaderboardScreen extends StatelessWidget {
     final profile = controller.profile;
     final entries = controller.filteredLeaderboardEntries;
     final selectedCity = controller.selectedCity;
+    final isCirclesTab = controller.leaderboardTabIndex == 1;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -33,7 +35,9 @@ class LeaderboardScreen extends StatelessWidget {
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
             child: RefreshIndicator(
-              onRefresh: controller.refreshLeaderboard,
+              onRefresh: isCirclesTab
+                  ? controller.refreshGroups
+                  : controller.refreshLeaderboard,
               child: CustomScrollView(
                 key: const ValueKey('leaderboard-scroll'),
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -66,21 +70,22 @@ class LeaderboardScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            StatusPill(
-                              label: profile.showOnLeaderboard
-                                  ? 'Opted in'
-                                  : 'Private',
-                              icon: profile.showOnLeaderboard
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              foregroundColor: profile.showOnLeaderboard
-                                  ? colors.performanceGreen
-                                  : colors.textSecondary,
-                              backgroundColor: profile.showOnLeaderboard
-                                  ? colors.deepGreenSurface
-                                  : colors.surfaceElevated,
-                              onTap: () => controller.setTabIndex(3),
-                            ),
+                            if (!isCirclesTab)
+                              StatusPill(
+                                label: profile.showOnLeaderboard
+                                    ? 'Opted in'
+                                    : 'Private',
+                                icon: profile.showOnLeaderboard
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                foregroundColor: profile.showOnLeaderboard
+                                    ? colors.performanceGreen
+                                    : colors.textSecondary,
+                                backgroundColor: profile.showOnLeaderboard
+                                    ? colors.deepGreenSurface
+                                    : colors.surfaceElevated,
+                                onTap: () => controller.setTabIndex(3),
+                              ),
                           ],
                         ),
                         if (controller.isOffline) ...[
@@ -121,89 +126,100 @@ class LeaderboardScreen extends StatelessWidget {
                         ],
                         const SizedBox(height: NearPaceSpacing.md),
 
-                        // Opt-in privacy prompt when runner is currently hidden.
-                        if (!profile.showOnLeaderboard) ...[
-                          NearPaceCard(
-                            elevated: true,
-                            padding: const EdgeInsets.all(NearPaceSpacing.md),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: colors.deepGreenSurface,
-                                    borderRadius: BorderRadius.circular(
-                                      NearPaceSpacing.radiusSm,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.shield_outlined,
-                                    size: 20,
-                                    color: colors.performanceGreen,
-                                  ),
-                                ),
-                                const SizedBox(width: NearPaceSpacing.sm),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Join this week\'s leaderboard',
-                                        style: textTheme.titleSmall,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Share your name, city, and weekly '
-                                        'distance to see your rank. Your routes '
-                                        'stay private.',
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: NearPaceSpacing.xs),
-                                FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    minimumSize: const Size(0, 44),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                    ),
-                                  ),
-                                  onPressed: () =>
-                                      controller.setShowOnLeaderboard(true),
-                                  child: const Text('Join'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: NearPaceSpacing.md),
-                        ],
-
-                        // Compact City Selector Pill
-                        Row(
-                          children: [
-                            _CitySelectorPill(
-                              selectedCity: selectedCity,
-                              runnerCount: entries.length,
-                              onTap: () {
-                                _showCitySearchSheet(
-                                  context,
-                                  controller: controller,
-                                  userCity: profile.city,
-                                );
-                              },
-                            ),
-                          ],
+                        // Segmented switch: Kota | Circles (Bottom Nav stays 4 tabs).
+                        LeaderboardModeSwitch(
+                          selectedIndex: controller.leaderboardTabIndex,
+                          circleCount: controller.userGroups.length,
+                          onChanged: controller.setLeaderboardTabIndex,
                         ),
+
+                        if (!isCirclesTab) ...[
+                          const SizedBox(height: NearPaceSpacing.md),
+
+                          // Opt-in privacy prompt when runner is currently hidden.
+                          if (!profile.showOnLeaderboard) ...[
+                            NearPaceCard(
+                              elevated: true,
+                              padding: const EdgeInsets.all(NearPaceSpacing.md),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: colors.deepGreenSurface,
+                                      borderRadius: BorderRadius.circular(
+                                        NearPaceSpacing.radiusSm,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.shield_outlined,
+                                      size: 20,
+                                      color: colors.performanceGreen,
+                                    ),
+                                  ),
+                                  const SizedBox(width: NearPaceSpacing.sm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Join this week\'s leaderboard',
+                                          style: textTheme.titleSmall,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Share your name, city, and weekly '
+                                          'distance to see your rank. Your routes '
+                                          'stay private.',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: colors.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: NearPaceSpacing.xs),
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size(0, 44),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        controller.setShowOnLeaderboard(true),
+                                    child: const Text('Join'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: NearPaceSpacing.md),
+                          ],
+
+                          // Compact City Selector Pill
+                          Row(
+                            children: [
+                              _CitySelectorPill(
+                                selectedCity: selectedCity,
+                                runnerCount: entries.length,
+                                onTap: () {
+                                  _showCitySearchSheet(
+                                    context,
+                                    controller: controller,
+                                    userCity: profile.city,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
 
-                  // Main ranked content.
+                  // Main ranked content (City standings or Running Circles).
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       gutter,
@@ -211,76 +227,76 @@ class LeaderboardScreen extends StatelessWidget {
                       gutter,
                       NearPaceSpacing.xxxl,
                     ),
-                    sliver: switch (controller.leaderboardState) {
-                      ViewLoadState.loading => const SliverToBoxAdapter(
-                        child: LoadingSkeletonList(itemCount: 4),
-                      ),
-                      ViewLoadState.error => SliverToBoxAdapter(
-                        child: ErrorStateView(
-                          title: 'Could not load leaderboard',
-                          message:
-                              controller.leaderboardError ??
-                              'Unable to load this week\'s rankings right now.',
-                          onRetry: controller.retryLeaderboard,
-                        ),
-                      ),
-                      ViewLoadState.ready when entries.isEmpty =>
-                        SliverToBoxAdapter(
-                          child: EmptyStateView(
-                            icon: Icons.leaderboard_outlined,
-                            title: selectedCity == null
-                                ? 'No runners on this week\'s board'
-                                : 'No runners in $selectedCity yet',
-                            message: selectedCity == null
-                                ? 'Join the leaderboard and log a run to '
-                                      'appear here.'
-                                : 'No runners in $selectedCity have logged a '
-                                      'run this week yet.',
-                            actionLabel: selectedCity == null
-                                ? (profile.showOnLeaderboard
-                                      ? null
-                                      : 'Join leaderboard')
-                                : 'Show all cities',
-                            onAction: selectedCity == null
-                                ? (profile.showOnLeaderboard
-                                      ? null
-                                      : () => controller.setShowOnLeaderboard(
-                                          true,
-                                        ))
-                                : () => controller.setSelectedCity(null),
-                          ),
-                        ),
-                      ViewLoadState.ready => SliverList.list(
-                        children: [
-                          if (entries.length >= 2) ...[
-                            _TopRunnersStrip(
-                              topEntries: entries
-                                  .take(3)
-                                  .toList(growable: false),
-                              currentUid: profile.uid,
+                    sliver: isCirclesTab
+                        ? const SliverToBoxAdapter(child: CirclesTabContent())
+                        : switch (controller.leaderboardState) {
+                            ViewLoadState.loading => const SliverToBoxAdapter(
+                              child: LoadingSkeletonList(itemCount: 4),
                             ),
-                            const SizedBox(height: NearPaceSpacing.md),
-                          ],
-                          ...List.generate(entries.length, (index) {
-                            final entry = entries[index];
-                            final isCurrentUser = entry.uid == profile.uid;
-                            return Padding(
-                              key: ValueKey(entry.documentId),
-                              padding: EdgeInsets.only(
-                                bottom: index == entries.length - 1
-                                    ? 0
-                                    : NearPaceSpacing.xs,
+                            ViewLoadState.error => SliverToBoxAdapter(
+                              child: ErrorStateView(
+                                title: 'Could not load leaderboard',
+                                message: controller.leaderboardError ?? 'Unable to load this week\'s rankings right now.',
+                                onRetry: controller.retryLeaderboard,
                               ),
-                              child: _LeaderboardRow(
-                                rank: index + 1,
-                                entry: entry,
-                                isCurrentUser: isCurrentUser,
+                            ),
+                            ViewLoadState.ready when entries.isEmpty =>
+                              SliverToBoxAdapter(
+                                child: EmptyStateView(
+                                  icon: Icons.leaderboard_outlined,
+                                  title: selectedCity == null
+                                      ? 'No runners on this week\'s board'
+                                      : 'No runners in $selectedCity yet',
+                                  message: selectedCity == null
+                                      ? 'Join the leaderboard and log a run to '
+                                            'appear here.'
+                                      : 'No runners in $selectedCity have logged a '
+                                            'run this week yet.',
+                                  actionLabel: selectedCity == null
+                                      ? (profile.showOnLeaderboard
+                                            ? null
+                                            : 'Join leaderboard')
+                                      : 'Show all cities',
+                                  onAction: selectedCity == null
+                                      ? (profile.showOnLeaderboard
+                                            ? null
+                                            : () => controller
+                                                  .setShowOnLeaderboard(true))
+                                      : () => controller.setSelectedCity(null),
+                                ),
                               ),
-                            );
-                          }),
-                        ],
-                      ),
-                    },
+                            ViewLoadState.ready => SliverList.list(
+                              children: [
+                                if (entries.length >= 2) ...[
+                                  _TopRunnersStrip(
+                                    topEntries: entries
+                                        .take(3)
+                                        .toList(growable: false),
+                                    currentUid: profile.uid,
+                                  ),
+                                  const SizedBox(height: NearPaceSpacing.md),
+                                ],
+                                ...List.generate(entries.length, (index) {
+                                  final entry = entries[index];
+                                  final isCurrentUser =
+                                      entry.uid == profile.uid;
+                                  return Padding(
+                                    key: ValueKey(entry.documentId),
+                                    padding: EdgeInsets.only(
+                                      bottom: index == entries.length - 1
+                                          ? 0
+                                          : NearPaceSpacing.xs,
+                                    ),
+                                    child: _LeaderboardRow(
+                                      rank: index + 1,
+                                      entry: entry,
+                                      isCurrentUser: isCurrentUser,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          },
                   ),
                 ],
               ),

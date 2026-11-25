@@ -6,6 +6,7 @@ import 'config/firebase_bootstrap.dart';
 import 'config/firebase_config.dart';
 import 'data/repositories/activity_repository.dart';
 import 'data/repositories/auth_repository.dart';
+import 'data/repositories/group_repository.dart';
 import 'data/repositories/leaderboard_repository.dart';
 import 'data/repositories/profile_repository.dart';
 import 'data/repositories/weather_repository.dart';
@@ -17,6 +18,7 @@ import 'services/run_checkpoint_service.dart';
 import 'services/run_foreground_service.dart';
 import 'services/run_reminder_service.dart';
 import 'services/weather_cache_service.dart';
+import 'state/mock_data.dart';
 import 'state/nearpace_controller.dart';
 import 'theme/nearpace_spacing.dart';
 import 'theme/nearpace_theme.dart';
@@ -37,6 +39,7 @@ class NearPaceApp extends StatelessWidget {
     this.profileRepository,
     this.activityRepository,
     this.leaderboardRepository,
+    this.groupRepository,
     this.weatherRepository,
     this.locationService,
     this.pushService,
@@ -58,6 +61,7 @@ class NearPaceApp extends StatelessWidget {
   final ProfileRepository? profileRepository;
   final ActivityRepository? activityRepository;
   final LeaderboardRepository? leaderboardRepository;
+  final GroupRepository? groupRepository;
   final WeatherRepository? weatherRepository;
   final LocationTrackingService? locationService;
   final PushNotificationService? pushService;
@@ -72,6 +76,7 @@ class NearPaceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasFirebase = Firebase.apps.isNotEmpty;
     final isReady = firebaseStatus is FirebaseReady && hasFirebase;
+    final now = clockNow ?? DateTime.now();
     final weatherCache =
         weatherCacheService ??
         (isReady
@@ -101,6 +106,16 @@ class NearPaceApp extends StatelessWidget {
             (isReady
                 ? FirestoreLeaderboardRepository()
                 : MockLeaderboardRepository()),
+        groupRepository:
+            groupRepository ??
+            (isReady
+                ? FirestoreGroupRepository()
+                : MockGroupRepository(
+                    initialGroups: NearPaceMockData.initialPreviewGroups(now),
+                    initialMembers: NearPaceMockData.initialPreviewGroupMembers(
+                      now,
+                    ),
+                  )),
         weatherRepository:
             weatherRepository ??
             (isReady

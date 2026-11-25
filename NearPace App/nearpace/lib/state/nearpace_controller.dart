@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../config/firebase_bootstrap.dart';
 import '../data/repositories/activity_repository.dart';
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/group_repository.dart';
 import '../data/repositories/leaderboard_repository.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/repositories/weather_repository.dart';
@@ -12,6 +13,7 @@ import '../domain/activity.dart';
 import '../domain/geo_point.dart';
 import '../domain/leaderboard_entry.dart';
 import '../domain/run_checkpoint.dart';
+import '../domain/run_group.dart';
 import '../domain/run_reminder.dart';
 import '../domain/run_session.dart';
 import '../domain/run_state.dart';
@@ -66,6 +68,7 @@ class NearPaceController extends ChangeNotifier {
     this.profileRepository,
     this.activityRepository,
     this.leaderboardRepository,
+    this.groupRepository,
     this.weatherRepository,
     this.locationService,
     this.pushService,
@@ -107,6 +110,7 @@ class NearPaceController extends ChangeNotifier {
   final ProfileRepository? profileRepository;
   final ActivityRepository? activityRepository;
   final LeaderboardRepository? leaderboardRepository;
+  final GroupRepository? groupRepository;
   final WeatherRepository? weatherRepository;
   final LocationTrackingService? locationService;
   final PushNotificationService? pushService;
@@ -184,6 +188,24 @@ class NearPaceController extends ChangeNotifier {
   String? _leaderboardError;
   String? get leaderboardError => _leaderboardError;
 
+  int _leaderboardTabIndex = 0;
+  int get leaderboardTabIndex => _leaderboardTabIndex;
+
+  // --- Running Circles / Groups ---
+  final List<RunGroup> _userGroups = <RunGroup>[];
+  List<RunGroup> get userGroups => List.unmodifiable(_userGroups);
+
+  final Map<String, List<GroupMemberRank>> _groupMembersById =
+      <String, List<GroupMemberRank>>{};
+
+  ViewLoadState _groupsState = ViewLoadState.ready;
+  ViewLoadState get groupsState => _groupsState;
+  String? _groupsError;
+  String? get groupsError => _groupsError;
+
+  bool _isGroupActionBusy = false;
+  bool get isGroupActionBusy => _isGroupActionBusy;
+
   // --- Recording Session ---
   RunState _runState = const RunIdle();
   RunState get runState => _runState;
@@ -208,6 +230,10 @@ class NearPaceController extends ChangeNotifier {
   StreamSubscription<UserProfile?>? _profileSubscription;
   StreamSubscription<List<Activity>>? _activitiesSubscription;
   StreamSubscription<List<LeaderboardEntry>>? _leaderboardSubscription;
+  StreamSubscription<List<RunGroup>>? _userGroupsSubscription;
+  final Map<String, StreamSubscription<List<GroupMemberRank>>>
+  _groupMemberSubscriptions =
+      <String, StreamSubscription<List<GroupMemberRank>>>{};
   StreamSubscription<ForegroundNotice>? _pushSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<GeoPointLite>? _positionSubscription;
@@ -405,6 +431,7 @@ class NearPaceController extends ChangeNotifier {
   void _initSubscriptions() {
     if (_isLocalPreview) {
       if (_isSignedIn) {
+        _subscribeToUserGroups(_profile.uid);
         unawaited(_restoreCheckpointIfAny());
       }
       return;
@@ -496,6 +523,8 @@ class NearPaceController extends ChangeNotifier {
           );
     }
 
+    _subscribeToUserGroups(uid);
+
     // Initialize Push Notifications if enabled.
     final push = pushService;
     if (push != null) {
@@ -517,6 +546,68 @@ class NearPaceController extends ChangeNotifier {
     _profileSubscription = null;
     _activitiesSubscription?.cancel();
     _activitiesSubscription = null;
+    _unsubscribeGroups();
+  }
+
+  void _subscribeToUserGroups(String uid) {
+    final repo = groupRepository;
+    if (repo == null || uid.isEmpty) return;
+
+    _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = repo
+        .watchUserGroups(uid)
+        .listen(
+          (groups) {
+            _userGroups
+              ..clear()
+              ..addAll(groups);
+            _groupsState = ViewLoadState.ready;
+            _groupsError = null;
+            _reconcileGroupMemberSubscriptions(groups);
+            notifyListeners();
+          },
+          onError: (error) {
+            _groupsState = ViewLoadState.error;
+            _groupsError = error.toString();
+            notifyListeners();
+          },
+        );
+  }
+
+  void _reconcileGroupMemberSubscriptions(List<RunGroup> groups) {
+    final repo = groupRepository;
+    if (repo == null) return;
+
+    final activeIds = groups.map((g) => g.id).toSet();
+    final staleIds = _groupMemberSubscriptions.keys
+        .where((id) => !activeIds.contains(id))
+        .toList(growable: false);
+    for (final id in staleIds) {
+      _groupMemberSubscriptions.remove(id)?.cancel();
+      _groupMembersById.remove(id);
+    }
+
+    final weekKey = currentWeekKey;
+    for (final group in groups) {
+      if (_groupMemberSubscriptions.containsKey(group.id)) continue;
+      _groupMemberSubscriptions[group.id] = repo
+          .watchGroupMembers(group.id, weekKey)
+          .listen((members) {
+            _groupMembersById[group.id] = members;
+            notifyListeners();
+          }, onError: (_) {});
+    }
+  }
+
+  void _unsubscribeGroups() {
+    _userGroupsSubscription?.cancel();
+    _userGroupsSubscription = null;
+    for (final sub in _groupMemberSubscriptions.values) {
+      sub.cancel();
+    }
+    _groupMemberSubscriptions.clear();
+    _userGroups.clear();
+    _groupMembersById.clear();
   }
 
   void _subscribeToLeaderboard() {
@@ -801,6 +892,7 @@ class NearPaceController extends ChangeNotifier {
     );
     _isSignedIn = true;
     _selectedTabIndex = 0;
+    _subscribeToUserGroups(_profile.uid);
     notifyListeners();
   }
 
@@ -818,12 +910,14 @@ class NearPaceController extends ChangeNotifier {
     );
     _isSignedIn = true;
     _selectedTabIndex = 0;
+    _subscribeToUserGroups(_profile.uid);
     notifyListeners();
   }
 
   void enterQuickPreview() {
     _isSignedIn = true;
     _selectedTabIndex = 0;
+    _subscribeToUserGroups(_profile.uid);
     notifyListeners();
   }
 
@@ -874,6 +968,7 @@ class NearPaceController extends ChangeNotifier {
         await _syncLeaderboardEntry();
       }
     }
+    await _syncAllGroupMemberStats();
   }
 
   Future<void> updateAvatar(String avatarId) async {
@@ -888,6 +983,7 @@ class NearPaceController extends ChangeNotifier {
         await _syncLeaderboardEntry();
       }
     }
+    await _syncAllGroupMemberStats();
   }
 
   Future<void> setShowOnLeaderboard(bool value) async {
@@ -1025,6 +1121,184 @@ class NearPaceController extends ChangeNotifier {
     if (_selectedCity == city) return;
     _selectedCity = city;
     notifyListeners();
+  }
+
+  void setLeaderboardTabIndex(int index) {
+    if (_leaderboardTabIndex == index) return;
+    _leaderboardTabIndex = index;
+    notifyListeners();
+  }
+
+  // --- Running Circles / Groups Actions ---
+
+  RunGroup? groupById(String groupId) {
+    for (final group in _userGroups) {
+      if (group.id == groupId) return group;
+    }
+    return null;
+  }
+
+  List<GroupMemberRank> groupMembersFor(String groupId) {
+    return List.unmodifiable(
+      _groupMembersById[groupId] ?? const <GroupMemberRank>[],
+    );
+  }
+
+  int? userRankInGroup(String groupId) {
+    final members = _groupMembersById[groupId];
+    if (members == null || members.isEmpty) return null;
+    final idx = members.indexWhere((m) => m.uid == _profile.uid);
+    return idx >= 0 ? idx + 1 : null;
+  }
+
+  double groupTotalWeeklyDistanceMeters(String groupId) {
+    final members = _groupMembersById[groupId];
+    if (members == null || members.isEmpty) return 0.0;
+    return members.fold(0.0, (sum, m) => sum + m.distanceM);
+  }
+
+  Stream<List<GroupMemberRank>> watchGroupMembers(String groupId) {
+    final repo = groupRepository;
+    if (repo == null) {
+      return Stream<List<GroupMemberRank>>.value(const <GroupMemberRank>[]);
+    }
+    return repo.watchGroupMembers(groupId, currentWeekKey);
+  }
+
+  Future<void> refreshGroups() async {
+    if (_profile.uid.isNotEmpty) {
+      _subscribeToUserGroups(_profile.uid);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  Future<RunGroup> createGroup({
+    required String name,
+    String? description,
+    double? weeklyGoalKm,
+  }) async {
+    final repo = groupRepository;
+    if (repo == null) {
+      throw const GroupRepositoryException(
+        GroupErrorCode.unknown,
+        'Circles service is unavailable.',
+      );
+    }
+    _isGroupActionBusy = true;
+    notifyListeners();
+    try {
+      final created = await repo.createGroup(
+        ownerUid: _profile.uid,
+        ownerDisplayName: _profile.displayName,
+        ownerAvatarId: _profile.avatarId,
+        name: name,
+        description: description,
+        weeklyGoalKm: weeklyGoalKm,
+        weekKey: currentWeekKey,
+        initialDistanceM: weeklyDistanceMeters,
+        initialRunCount: weeklyActivities.length,
+        initialAvgPaceSecPerKm: weeklyAvgPaceSecPerKm,
+      );
+      if (!_userGroups.any((g) => g.id == created.id)) {
+        _userGroups.insert(0, created);
+        _reconcileGroupMemberSubscriptions(_userGroups);
+      }
+      return created;
+    } finally {
+      _isGroupActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<RunGroup> joinGroupByCode(String inviteCode) async {
+    final repo = groupRepository;
+    if (repo == null) {
+      throw const GroupRepositoryException(
+        GroupErrorCode.unknown,
+        'Circles service is unavailable.',
+      );
+    }
+    _isGroupActionBusy = true;
+    notifyListeners();
+    try {
+      final joined = await repo.joinGroupByCode(
+        inviteCode: inviteCode,
+        uid: _profile.uid,
+        displayName: _profile.displayName,
+        avatarId: _profile.avatarId,
+        weekKey: currentWeekKey,
+        initialDistanceM: weeklyDistanceMeters,
+        initialRunCount: weeklyActivities.length,
+        initialAvgPaceSecPerKm: weeklyAvgPaceSecPerKm,
+      );
+      if (!_userGroups.any((g) => g.id == joined.id)) {
+        _userGroups.insert(0, joined);
+        _reconcileGroupMemberSubscriptions(_userGroups);
+      }
+      return joined;
+    } finally {
+      _isGroupActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> leaveGroup(String groupId) async {
+    final repo = groupRepository;
+    if (repo == null) return;
+    _isGroupActionBusy = true;
+    notifyListeners();
+    try {
+      await repo.leaveGroup(groupId: groupId, uid: _profile.uid);
+      _userGroups.removeWhere((g) => g.id == groupId);
+      _groupMemberSubscriptions.remove(groupId)?.cancel();
+      _groupMembersById.remove(groupId);
+    } finally {
+      _isGroupActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteGroup(String groupId) async {
+    final repo = groupRepository;
+    if (repo == null) return;
+    _isGroupActionBusy = true;
+    notifyListeners();
+    try {
+      await repo.deleteGroup(groupId: groupId, ownerUid: _profile.uid);
+      _userGroups.removeWhere((g) => g.id == groupId);
+      _groupMemberSubscriptions.remove(groupId)?.cancel();
+      _groupMembersById.remove(groupId);
+    } finally {
+      _isGroupActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _syncAllGroupMemberStats() async {
+    final repo = groupRepository;
+    if (repo == null || _profile.uid.isEmpty || _userGroups.isEmpty) return;
+
+    final memberStats = GroupMemberRank(
+      uid: _profile.uid,
+      displayName: _profile.displayName,
+      avatarId: _profile.avatarId,
+      weekKey: currentWeekKey,
+      distanceM: weeklyDistanceMeters,
+      runCount: weeklyActivities.length,
+      avgPaceSecPerKm: weeklyAvgPaceSecPerKm,
+      updatedAt: now,
+    );
+
+    final targets = List<RunGroup>.from(_userGroups);
+    for (final group in targets) {
+      try {
+        await repo
+            .upsertMemberStats(groupId: group.id, member: memberStats)
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {
+        // Circle sync failure must not block activity save or flush.
+      }
+    }
   }
 
   void setHistoryState(ViewLoadState state, {String? error}) {
@@ -1413,6 +1687,7 @@ class NearPaceController extends ChangeNotifier {
             } else if (_profile.showOnLeaderboard) {
               await _syncLeaderboardEntry();
             }
+            await _syncAllGroupMemberStats();
           } catch (_) {
             final pendingAct = activityToSave.copyWith(pendingSync: true);
             final idx = _activities.indexWhere(
@@ -1431,6 +1706,8 @@ class NearPaceController extends ChangeNotifier {
     } else {
       if (activityToSave.pendingSync) {
         await pendingSyncStorage?.addPendingActivity(activityToSave);
+      } else {
+        await _syncAllGroupMemberStats();
       }
     }
   }
@@ -1512,8 +1789,11 @@ class NearPaceController extends ChangeNotifier {
         }
       }
 
-      if (syncedCount > 0 && _profile.showOnLeaderboard) {
-        await _syncLeaderboardEntry();
+      if (syncedCount > 0) {
+        if (_profile.showOnLeaderboard) {
+          await _syncLeaderboardEntry();
+        }
+        await _syncAllGroupMemberStats();
       }
     } finally {
       _isSyncingActivities = false;
@@ -1534,6 +1814,7 @@ class NearPaceController extends ChangeNotifier {
         await _syncLeaderboardEntry();
       }
     }
+    await _syncAllGroupMemberStats();
   }
 
   void _startRunTimer() {
@@ -1599,6 +1880,7 @@ class NearPaceController extends ChangeNotifier {
     _profileSubscription?.cancel();
     _activitiesSubscription?.cancel();
     _leaderboardSubscription?.cancel();
+    _unsubscribeGroups();
     _pushSubscription?.cancel();
     _tokenRefreshSubscription?.cancel();
     _positionSubscription?.cancel();

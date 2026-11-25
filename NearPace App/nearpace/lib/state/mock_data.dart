@@ -1,6 +1,7 @@
 import '../domain/activity.dart';
 import '../domain/geo_point.dart';
 import '../domain/leaderboard_entry.dart';
+import '../domain/run_group.dart';
 import '../domain/user_profile.dart';
 import '../domain/weather.dart';
 import '../utils/formatters.dart';
@@ -252,5 +253,63 @@ class NearPaceMockData {
         updatedAt: now.subtract(const Duration(days: 1)),
       ),
     ];
+  }
+
+  /// Seeded joinable circle for local preview (current user is NOT yet a member
+  /// so the empty state renders first, and code `NDP4CE` can be used to test joining).
+  static List<RunGroup> initialPreviewGroups(DateTime now) {
+    return [
+      RunGroup(
+        id: 'preview-circle-losari',
+        name: 'Losari Sunrise Crew',
+        description:
+            'Weekly 25 km morning pace challenge around Pantai Losari.',
+        inviteCode: 'NDP4CE',
+        ownerUid: 'runner-nadia',
+        memberUids: const ['runner-nadia', 'runner-rafli', 'runner-dimas'],
+        weeklyGoalKm: 25.0,
+        createdAt: now.subtract(const Duration(days: 14)),
+      ),
+    ];
+  }
+
+  static Map<String, List<GroupMemberRank>> initialPreviewGroupMembers(
+    DateTime now,
+  ) {
+    final weekKey = NearPaceFormatters.isoWeekKey(now);
+    return {
+      'preview-circle-losari': [
+        GroupMemberRank(
+          uid: 'runner-nadia',
+          displayName: 'Nadia Rahman',
+          avatarId: 'pace_queen',
+          weekKey: weekKey,
+          distanceM: 34200,
+          runCount: 5,
+          avgPaceSecPerKm: 312,
+          updatedAt: now.subtract(const Duration(hours: 2)),
+        ),
+        GroupMemberRank(
+          uid: 'runner-rafli',
+          displayName: 'Rafli Hidayat',
+          avatarId: 'volt_sprinter',
+          weekKey: weekKey,
+          distanceM: 24650,
+          runCount: 4,
+          avgPaceSecPerKm: 334,
+          updatedAt: now.subtract(const Duration(hours: 6)),
+        ),
+        GroupMemberRank(
+          uid: 'runner-dimas',
+          displayName: 'Dimas Santoso',
+          avatarId: 'apex_wolf',
+          weekKey: weekKey,
+          distanceM: 16200,
+          runCount: 3,
+          avgPaceSecPerKm: 348,
+          updatedAt: now.subtract(const Duration(hours: 11)),
+        ),
+      ],
+    };
   }
 }
