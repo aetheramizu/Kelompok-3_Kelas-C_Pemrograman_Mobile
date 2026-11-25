@@ -1,13 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:nearpace/app.dart';
 import 'package:nearpace/domain/activity.dart';
 import 'package:nearpace/domain/geo_point.dart';
 import 'package:nearpace/domain/leaderboard_entry.dart';
 import 'package:nearpace/domain/user_profile.dart';
 import 'package:nearpace/services/indonesian_cities.dart';
+import 'package:nearpace/services/location_tracking_service.dart';
 import 'package:nearpace/theme/nearpace_theme.dart';
 import 'package:nearpace/ui/widgets/avatar_picker_sheet.dart';
+import 'package:nearpace/ui/widgets/city_picker_sheet.dart';
 import 'package:nearpace/ui/widgets/nearpace_avatar.dart';
+import 'package:nearpace/ui/widgets/route_sketch.dart';
 import 'package:nearpace/ui/widgets/share_activity_sheet.dart';
 
 void main() {
@@ -23,6 +27,24 @@ void main() {
       expect(cities, isNotEmpty);
       expect(cities.any((c) => c.name == 'Jakarta Pusat'), isTrue);
     });
+
+    test(
+      'bundled indonesia_cities.json covers all 38 provinces cleanly',
+      () async {
+        final cities = await IndonesianCitiesService.loadCities();
+        expect(cities.length, greaterThanOrEqualTo(200));
+
+        final provinces = cities.map((c) => c.province).toSet();
+        expect(provinces.length, 38);
+
+        final names = cities.map((c) => c.name).toSet();
+        expect(
+          names.length,
+          cities.length,
+          reason: 'City names must be unique',
+        );
+      },
+    );
 
     test('Haversine distance between Jakarta and Surabaya ≈ 660-680 km', () {
       // Jakarta Pusat → Surabaya
@@ -80,6 +102,73 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // CityPickerSheet & Leaderboard City Filter Pill
+  // ---------------------------------------------------------------------------
+
+  group('Phase 3 - CityPickerSheet & Leaderboard City Filter', () {
+    testWidgets('CityPickerSheet supports live search and Detect from GPS', (
+      tester,
+    ) async {
+      String? picked;
+      final locationService = SimulatedLocationService();
+
+      await tester.pumpWidget(
+        NearPaceApp(
+          startSignedIn: true,
+          locationService: locationService,
+          clockNow: DateTime(2026, 11, 24, 9, 0),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open CityPickerSheet from a BuildContext that has NearPaceController
+      final context = tester.element(find.text('Home'));
+      final future = CityPickerSheet.show(context, currentCity: 'Makassar');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detect from GPS'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'Surabaya');
+      await tester.pumpAndSettle();
+      expect(find.text('Surabaya'), findsWidgets);
+
+      await tester.tap(find.widgetWithText(ListTile, 'Surabaya'));
+      await tester.pumpAndSettle();
+      picked = await future;
+      expect(picked, 'Surabaya');
+    });
+
+    testWidgets(
+      'LeaderboardScreen opens searchable city filter sheet from pill',
+      (tester) async {
+        await tester.pumpWidget(
+          NearPaceApp(
+            startSignedIn: true,
+            clockNow: DateTime(2026, 11, 24, 9, 0),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Ranks'));
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('All Indonesia'), findsOneWidget);
+        await tester.tap(find.textContaining('All Indonesia'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Filter by City'), findsOneWidget);
+        await tester.enterText(find.byType(TextField), 'Bandung');
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(ListTile, 'Bandung'));
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Bandung ('), findsOneWidget);
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------------
   // Avatar Presets & Domain Model
   // ---------------------------------------------------------------------------
 
@@ -91,10 +180,12 @@ void main() {
     });
 
     test('avatars span 8 runners and 4 mascots', () {
-      final runners =
-          kNearPaceAvatars.where((a) => a.category == 'runners').length;
-      final mascots =
-          kNearPaceAvatars.where((a) => a.category == 'mascots').length;
+      final runners = kNearPaceAvatars
+          .where((a) => a.category == 'runners')
+          .length;
+      final mascots = kNearPaceAvatars
+          .where((a) => a.category == 'mascots')
+          .length;
       expect(runners, 8);
       expect(mascots, 4);
     });
@@ -106,20 +197,20 @@ void main() {
         displayName: 'Test Runner',
         city: 'Makassar',
         showOnLeaderboard: true,
-        avatarId: 'dawn_sprinter',
+        avatarId: 'volt_sprinter',
       );
 
-      expect(profile.avatarId, 'dawn_sprinter');
+      expect(profile.avatarId, 'volt_sprinter');
 
-      final copied = profile.copyWith(avatarId: 'trail_blazer');
-      expect(copied.avatarId, 'trail_blazer');
+      final copied = profile.copyWith(avatarId: 'trail_explorer');
+      expect(copied.avatarId, 'trail_explorer');
       expect(copied.displayName, 'Test Runner');
 
       final map = profile.toMap();
-      expect(map['avatarId'], 'dawn_sprinter');
+      expect(map['avatarId'], 'volt_sprinter');
 
       final restored = UserProfile.fromMap('u1', map);
-      expect(restored.avatarId, 'dawn_sprinter');
+      expect(restored.avatarId, 'volt_sprinter');
       expect(restored.uid, 'u1');
     });
 
@@ -128,24 +219,24 @@ void main() {
         uid: 'u1',
         displayName: 'Runner A',
         city: 'Bandung',
-        weekKey: '2026-W48',
+        weekKey: '2026-11-23',
         distanceM: 10000,
         runCount: 3,
         updatedAt: DateTime.utc(2026, 11, 24),
-        avatarId: 'night_owl',
+        avatarId: 'night_runner',
       );
 
-      expect(entry.avatarId, 'night_owl');
+      expect(entry.avatarId, 'night_runner');
 
       final copied = entry.copyWith(avatarId: 'apex_wolf');
       expect(copied.avatarId, 'apex_wolf');
       expect(copied.distanceM, 10000);
 
       final map = entry.toMap();
-      expect(map['avatarId'], 'night_owl');
+      expect(map['avatarId'], 'night_runner');
 
       final restored = LeaderboardEntry.fromMap(map);
-      expect(restored.avatarId, 'night_owl');
+      expect(restored.avatarId, 'night_runner');
     });
 
     test('LeaderboardEntry without avatarId deserializes with null', () {
@@ -153,7 +244,7 @@ void main() {
         'uid': 'u2',
         'displayName': 'Old User',
         'city': 'Jakarta',
-        'weekKey': '2026-W47',
+        'weekKey': '2026-11-16',
         'distanceM': 5000.0,
         'runCount': 1,
         'updatedAt': '2026-11-20T00:00:00.000Z',
@@ -174,7 +265,7 @@ void main() {
           home: const Scaffold(
             body: Center(
               child: NearPaceAvatar(
-                avatarId: 'dawn_sprinter',
+                avatarId: 'volt_sprinter',
                 name: 'Test Runner',
                 size: 56,
               ),
@@ -183,9 +274,15 @@ void main() {
         ),
       );
 
-      // Should find a ClipOval wrapping the custom painter
+      // Should find a ClipOval wrapping the custom painter inside NearPaceAvatar
       expect(find.byType(ClipOval), findsOneWidget);
-      expect(find.byType(CustomPaint), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(NearPaceAvatar),
+          matching: find.byType(CustomPaint),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('renders initials fallback for null avatarId', (tester) async {
@@ -210,8 +307,9 @@ void main() {
       expect(find.byType(ClipOval), findsNothing);
     });
 
-    testWidgets('renders initials fallback for unknown avatarId',
-        (tester) async {
+    testWidgets('renders initials fallback for unknown avatarId', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: NearPaceTheme.dark(),
@@ -262,14 +360,19 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('Phase 3 - AvatarPickerSheet', () {
-    testWidgets('opens modal and shows all 12 avatars', (tester) async {
+    testWidgets('opens modal, filters categories, and selects an avatar', (
+      tester,
+    ) async {
+      String? pickedAvatarId;
       await tester.pumpWidget(
         MaterialApp(
           theme: NearPaceTheme.dark(),
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => AvatarPickerSheet.show(context),
+                onPressed: () async {
+                  pickedAvatarId = await AvatarPickerSheet.show(context);
+                },
                 child: const Text('Pick Avatar'),
               ),
             ),
@@ -280,9 +383,21 @@ void main() {
       await tester.tap(find.text('Pick Avatar'));
       await tester.pumpAndSettle();
 
-      // All 12 avatar names should be visible in the grid
-      expect(find.textContaining('Dawn Sprinter'), findsOneWidget);
-      expect(find.textContaining('Apex Wolf'), findsOneWidget);
+      // Default preview + grid shows Volt Sprinter
+      expect(find.text('Volt Sprinter'), findsWidgets);
+
+      // Filter to mascots and select Apex Wolf
+      await tester.tap(find.text('Mascots (4)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Apex Wolf'), findsOneWidget);
+      await tester.tap(find.text('Apex Wolf'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select Apex Wolf'));
+      await tester.pumpAndSettle();
+
+      expect(pickedAvatarId, 'apex_wolf');
     });
   });
 
@@ -291,46 +406,100 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('Phase 3 - ShareActivitySheet', () {
-    testWidgets('renders with mode toggle and action buttons', (tester) async {
-      final activity = Activity(
-        id: 'share_test',
-        startedAt: DateTime.utc(2026, 11, 24, 6, 0),
-        endedAt: DateTime.utc(2026, 11, 24, 6, 30),
-        distanceM: 5000,
-        durationS: 1800,
-        avgPaceSecPerKm: 360.0,
-        route: const [
-          GeoPointLite(latitude: -5.145, longitude: 119.430),
-          GeoPointLite(latitude: -5.148, longitude: 119.435),
-          GeoPointLite(latitude: -5.150, longitude: 119.440),
-        ],
-      );
+    testWidgets(
+      'renders transparent sticker with checkerboard outside RepaintBoundary, overlay tone switch, and Dark Brand Card mode',
+      (tester) async {
+        final activity = Activity(
+          id: 'share_test',
+          startedAt: DateTime.utc(2026, 11, 24, 6, 0),
+          endedAt: DateTime.utc(2026, 11, 24, 6, 30),
+          distanceM: 5000,
+          durationS: 1800,
+          avgPaceSecPerKm: 360.0,
+          city: 'Tangerang Selatan',
+          route: const [
+            GeoPointLite(latitude: -5.145, longitude: 119.430),
+            GeoPointLite(latitude: -5.148, longitude: 119.435),
+            GeoPointLite(latitude: -5.150, longitude: 119.440),
+          ],
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: NearPaceTheme.dark(),
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () =>
-                    ShareActivitySheet.show(context, activity: activity),
-                child: const Text('Share'),
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: NearPaceTheme.dark(),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () =>
+                      ShareActivitySheet.show(context, activity: activity),
+                  child: const Text('Share'),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Share'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Share'));
+        await tester.pumpAndSettle();
 
-      // Mode selector chips should be present
-      expect(find.textContaining('Transparent'), findsOneWidget);
-      expect(find.textContaining('Dark'), findsOneWidget);
+        // No layout overflow
+        expect(tester.takeException(), isNull);
 
-      // Action buttons
-      expect(find.text('Save Image'), findsOneWidget);
-      expect(find.text('Share'), findsWidgets); // button + the trigger text
-    });
+        // Mode selector chips should be present
+        expect(find.textContaining('Transparent'), findsOneWidget);
+        expect(find.textContaining('Dark'), findsOneWidget);
+
+        // Overlay tone options in transparent sticker mode
+        expect(find.text('Volt #B7F36B'), findsOneWidget);
+        expect(find.text('Pure White'), findsOneWidget);
+
+        // Checkerboard preview is outside RepaintBoundary
+        final checkerboardFinder = find.byKey(
+          const ValueKey('share-preview-checkerboard'),
+        );
+        expect(checkerboardFinder, findsOneWidget);
+        final boundaryFinder = find.descendant(
+          of: checkerboardFinder,
+          matching: find.byType(RepaintBoundary),
+        );
+        expect(boundaryFinder, findsOneWidget);
+
+        // RouteSketch inside RepaintBoundary uses transparent background
+        final routeSketch = tester.widget<RouteSketch>(
+          find.descendant(
+            of: boundaryFinder,
+            matching: find.byType(RouteSketch),
+          ),
+        );
+        expect(routeSketch.transparentBackground, isTrue);
+
+        // Switch overlay tone to Pure White
+        await tester.tap(find.text('Pure White'));
+        await tester.pumpAndSettle();
+        final whiteRouteSketch = tester.widget<RouteSketch>(
+          find.descendant(
+            of: boundaryFinder,
+            matching: find.byType(RouteSketch),
+          ),
+        );
+        expect(whiteRouteSketch.strokeColorOverride, const Color(0xFFF2F5F0));
+
+        // Switch to Dark Brand Card
+        await tester.tap(find.text('Dark Brand Card'));
+        await tester.pumpAndSettle();
+        expect(find.text('Pure White'), findsNothing);
+        final darkRouteSketch = tester.widget<RouteSketch>(
+          find.descendant(
+            of: boundaryFinder,
+            matching: find.byType(RouteSketch),
+          ),
+        );
+        expect(darkRouteSketch.transparentBackground, isFalse);
+
+        // Action buttons
+        expect(find.text('Save Image'), findsOneWidget);
+        expect(find.text('Share'), findsWidgets);
+      },
+    );
   });
 }

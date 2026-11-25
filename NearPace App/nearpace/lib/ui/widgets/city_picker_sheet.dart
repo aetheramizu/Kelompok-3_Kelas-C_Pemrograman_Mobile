@@ -56,7 +56,10 @@ class _CityPickerSheetState extends State<CityPickerSheet> {
     if (mounted) {
       setState(() {
         _allCities = cities;
-        _filteredCities = cities;
+        _filteredCities = IndonesianCitiesService.searchCities(
+          _searchController.text,
+          customCities: cities,
+        );
         _isLoading = false;
       });
     }
@@ -152,230 +155,247 @@ class _CityPickerSheetState extends State<CityPickerSheet> {
           right: BorderSide(color: colors.border),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Padding(
-            padding: const EdgeInsets.only(top: NearPaceSpacing.sm),
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colors.border,
-                borderRadius: BorderRadius.circular(2),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Padding(
+              padding: const EdgeInsets.only(top: NearPaceSpacing.sm),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              NearPaceSpacing.md,
-              NearPaceSpacing.sm,
-              NearPaceSpacing.md,
-              NearPaceSpacing.xs,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(widget.title, style: textTheme.titleMedium),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  color: colors.textSecondary,
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-
-          // Detect from GPS Button
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: NearPaceSpacing.md),
-            child: NearPaceCard(
-              onTap: _isDetectingGps ? null : _detectFromGps,
-              padding: const EdgeInsets.all(NearPaceSpacing.sm),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                NearPaceSpacing.md,
+                NearPaceSpacing.sm,
+                NearPaceSpacing.md,
+                NearPaceSpacing.xs,
+              ),
               child: Row(
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: colors.deepGreenSurface,
-                      borderRadius: BorderRadius.circular(
-                        NearPaceSpacing.radiusSm,
-                      ),
-                    ),
-                    child: _isDetectingGps
-                        ? Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colors.accent,
-                              ),
-                            ),
-                          )
-                        : Icon(
-                            Icons.my_location_rounded,
-                            size: 18,
-                            color: colors.accent,
-                          ),
-                  ),
-                  const SizedBox(width: NearPaceSpacing.sm),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Detect from GPS',
-                          style: textTheme.titleSmall?.copyWith(
-                            color: colors.accentText,
-                          ),
-                        ),
-                        Text(
-                          'Matches nearest Indonesian city via GPS coordinate',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: Text(widget.title, style: textTheme.titleMedium),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: colors.textMuted,
-                    size: 18,
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    color: colors.textSecondary,
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
             ),
-          ),
 
-          if (_gpsMessage != null)
+            // Detect from GPS Button
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                NearPaceSpacing.md,
-                NearPaceSpacing.xs,
-                NearPaceSpacing.md,
-                0,
+              padding: const EdgeInsets.symmetric(
+                horizontal: NearPaceSpacing.md,
               ),
-              child: Text(
-                _gpsMessage!,
-                style: textTheme.bodySmall?.copyWith(color: colors.warning),
-              ),
-            ),
-
-          const SizedBox(height: NearPaceSpacing.xs),
-
-          // Search Box
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: NearPaceSpacing.md,
-              vertical: NearPaceSpacing.xs,
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: textTheme.bodyMedium,
-              decoration: InputDecoration(
-                hintText: 'Search city or province...',
-                hintStyle: textTheme.bodyMedium?.copyWith(
-                  color: colors.textMuted,
-                ),
-                prefixIcon: Icon(Icons.search_rounded, color: colors.textMuted),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () => _searchController.clear(),
-                      )
-                    : null,
-                filled: true,
-                fillColor: colors.surfaceElevated,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: NearPaceSpacing.sm,
-                  vertical: NearPaceSpacing.xs,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
-                  borderSide: BorderSide(color: colors.accent),
-                ),
-              ),
-            ),
-          ),
-
-          // City List
-          Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: colors.accent))
-                : _filteredCities.isEmpty
-                ? Center(
-                    child: Text(
-                      'No Indonesian cities matching "${_searchController.text}"',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colors.textMuted,
+              child: NearPaceCard(
+                onTap: _isDetectingGps ? null : _detectFromGps,
+                padding: const EdgeInsets.all(NearPaceSpacing.sm),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: colors.deepGreenSurface,
+                        borderRadius: BorderRadius.circular(
+                          NearPaceSpacing.radiusSm,
+                        ),
+                      ),
+                      child: _isDetectingGps
+                          ? Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colors.accent,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.my_location_rounded,
+                              size: 18,
+                              color: colors.accent,
+                            ),
+                    ),
+                    const SizedBox(width: NearPaceSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Detect from GPS',
+                            style: textTheme.titleSmall?.copyWith(
+                              color: colors.accentText,
+                            ),
+                          ),
+                          Text(
+                            'Matches nearest Indonesian city via GPS coordinate',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colors.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NearPaceSpacing.md,
-                      vertical: NearPaceSpacing.xs,
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: colors.textMuted,
+                      size: 18,
                     ),
-                    itemCount: _filteredCities.length,
-                    separatorBuilder: (context, index) =>
-                        Divider(color: colors.border, height: 1),
-                    itemBuilder: (context, index) {
-                      final city = _filteredCities[index];
-                      final isSelected =
-                          widget.currentCity != null &&
-                          widget.currentCity!.trim().toLowerCase() ==
-                              city.name.trim().toLowerCase();
+                  ],
+                ),
+              ),
+            ),
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: NearPaceSpacing.xs,
-                          vertical: 2,
-                        ),
-                        title: Text(
-                          city.name,
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: isSelected
-                                ? colors.accentText
-                                : colors.textPrimary,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        subtitle: Text(
-                          city.province,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colors.textMuted,
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? Icon(
-                                Icons.check_circle_rounded,
-                                color: colors.accent,
-                                size: 20,
-                              )
-                            : null,
-                        onTap: () => Navigator.of(context).pop(city.name),
-                      );
-                    },
+            if (_gpsMessage != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  NearPaceSpacing.md,
+                  NearPaceSpacing.xs,
+                  NearPaceSpacing.md,
+                  0,
+                ),
+                child: Text(
+                  _gpsMessage!,
+                  style: textTheme.bodySmall?.copyWith(color: colors.warning),
+                ),
+              ),
+
+            const SizedBox(height: NearPaceSpacing.xs),
+
+            // Search Box
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: NearPaceSpacing.md,
+                vertical: NearPaceSpacing.xs,
+              ),
+              child: TextField(
+                controller: _searchController,
+                style: textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: 'Search city or province...',
+                  hintStyle: textTheme.bodyMedium?.copyWith(
+                    color: colors.textMuted,
                   ),
-          ),
-        ],
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: colors.textMuted,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () => _searchController.clear(),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: colors.surfaceElevated,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: NearPaceSpacing.sm,
+                    vertical: NearPaceSpacing.xs,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(
+                      NearPaceSpacing.radiusSm,
+                    ),
+                    borderSide: BorderSide(color: colors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(
+                      NearPaceSpacing.radiusSm,
+                    ),
+                    borderSide: BorderSide(color: colors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(
+                      NearPaceSpacing.radiusSm,
+                    ),
+                    borderSide: BorderSide(color: colors.accent),
+                  ),
+                ),
+              ),
+            ),
+
+            // City List
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(color: colors.accent),
+                    )
+                  : _filteredCities.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No Indonesian cities matching "${_searchController.text}"',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.textMuted,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NearPaceSpacing.md,
+                        vertical: NearPaceSpacing.xs,
+                      ),
+                      itemCount: _filteredCities.length,
+                      separatorBuilder: (context, index) =>
+                          Divider(color: colors.border, height: 1),
+                      itemBuilder: (context, index) {
+                        final city = _filteredCities[index];
+                        final isSelected =
+                            widget.currentCity != null &&
+                            widget.currentCity!.trim().toLowerCase() ==
+                                city.name.trim().toLowerCase();
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: NearPaceSpacing.xs,
+                            vertical: 2,
+                          ),
+                          title: Text(
+                            city.name,
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: isSelected
+                                  ? colors.accentText
+                                  : colors.textPrimary,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                          subtitle: Text(
+                            city.province,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colors.textMuted,
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? Icon(
+                                  Icons.check_circle_rounded,
+                                  color: colors.accent,
+                                  size: 20,
+                                )
+                              : null,
+                          onTap: () => Navigator.of(context).pop(city.name),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

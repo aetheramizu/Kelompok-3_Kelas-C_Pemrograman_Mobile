@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nearpace/main.dart';
+import 'package:nearpace/ui/widgets/city_picker_sheet.dart';
 
 void main() {
   final fixedClock = DateTime(2026, 11, 21, 9, 0);
@@ -387,16 +388,32 @@ void main() {
 
       await tester.tap(find.text('Edit profile'));
       await tester.pumpAndSettle();
-      expect(find.text('Edit profile'), findsOneWidget);
+      expect(find.text('Save changes'), findsOneWidget);
 
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Display name'),
         'Rina Kartika',
       );
+      await tester.tap(find.text('City (optional)'));
+      await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'City (optional)'),
+        find.descendant(
+          of: find.byType(CityPickerSheet),
+          matching: find.byType(TextField),
+        ),
         'Bandung',
       );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(CityPickerSheet),
+              matching: find.widgetWithText(ListTile, 'Bandung'),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
 

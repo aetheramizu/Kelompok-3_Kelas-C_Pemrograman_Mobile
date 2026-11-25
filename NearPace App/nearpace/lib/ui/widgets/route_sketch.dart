@@ -19,6 +19,8 @@ class RouteSketch extends StatelessWidget {
     this.showEndpoints = true,
     this.showGrid = true,
     this.isLive = false,
+    this.transparentBackground = false,
+    this.strokeColorOverride,
     this.emptyMessage = 'Route sketch appears once GPS points are recorded',
   });
 
@@ -28,6 +30,8 @@ class RouteSketch extends StatelessWidget {
   final bool showEndpoints;
   final bool showGrid;
   final bool isLive;
+  final bool transparentBackground;
+  final Color? strokeColorOverride;
   final String emptyMessage;
 
   @override
@@ -37,6 +41,7 @@ class RouteSketch extends StatelessWidget {
     final radius = BorderRadius.circular(
       compact ? NearPaceSpacing.radiusSm : NearPaceSpacing.radiusLg,
     );
+    final effectiveStroke = strokeColorOverride ?? colors.accent;
 
     return Semantics(
       label: hasRoute
@@ -46,25 +51,30 @@ class RouteSketch extends StatelessWidget {
         height: height,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: radius,
-          border: Border.all(color: colors.border),
+          color: transparentBackground ? Colors.transparent : colors.background,
+          borderRadius: transparentBackground ? null : radius,
+          border: transparentBackground
+              ? null
+              : Border.all(color: colors.border),
         ),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: transparentBackground ? Clip.none : Clip.antiAlias,
         child: hasRoute
             ? CustomPaint(
                 painter: _RouteSketchPainter(
                   points: route,
-                  strokeColor: colors.accent,
-                  glowColor: colors.accent.withValues(alpha: 0.24),
+                  strokeColor: effectiveStroke,
+                  glowColor: effectiveStroke.withValues(alpha: 0.24),
                   gridColor: colors.routeGrid,
-                  startColor: colors.textPrimary,
-                  endColor: colors.accent,
-                  backgroundColor: colors.background,
+                  startColor: strokeColorOverride ?? colors.textPrimary,
+                  endColor: effectiveStroke,
+                  backgroundColor: transparentBackground
+                      ? Colors.transparent
+                      : colors.background,
+                  transparentBackground: transparentBackground,
                   strokeWidth: compact ? 2.6 : 3.6,
                   padding: compact ? 10 : 22,
                   showEndpoints: showEndpoints,
-                  showGrid: showGrid,
+                  showGrid: showGrid && !transparentBackground,
                   isLive: isLive,
                 ),
                 child: const SizedBox.expand(),
@@ -72,7 +82,8 @@ class RouteSketch extends StatelessWidget {
             : _RouteEmptyCanvas(
                 compact: compact,
                 message: emptyMessage,
-                showGrid: showGrid,
+                showGrid: showGrid && !transparentBackground,
+                tintColor: strokeColorOverride,
               ),
       ),
     );
@@ -84,15 +95,18 @@ class _RouteEmptyCanvas extends StatelessWidget {
     required this.compact,
     required this.message,
     required this.showGrid,
+    this.tintColor,
   });
 
   final bool compact;
   final String message;
   final bool showGrid;
+  final Color? tintColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.npColors;
+    final iconColor = tintColor ?? colors.textMuted;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -102,21 +116,18 @@ class _RouteEmptyCanvas extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.all(compact ? 6 : NearPaceSpacing.md),
             child: compact
-                ? Icon(Icons.route_rounded, size: 20, color: colors.textMuted)
+                ? Icon(Icons.route_rounded, size: 20, color: iconColor)
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.route_rounded,
-                        size: 28,
-                        color: colors.textMuted,
-                      ),
+                      Icon(Icons.route_rounded, size: 28, color: iconColor),
                       const SizedBox(height: NearPaceSpacing.xs),
                       Text(
                         message,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: colors.textSecondary),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tintColor ?? colors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -161,6 +172,7 @@ class _RouteSketchPainter extends CustomPainter {
     required this.startColor,
     required this.endColor,
     required this.backgroundColor,
+    required this.transparentBackground,
     required this.strokeWidth,
     required this.padding,
     required this.showEndpoints,
@@ -175,6 +187,7 @@ class _RouteSketchPainter extends CustomPainter {
   final Color startColor;
   final Color endColor;
   final Color backgroundColor;
+  final bool transparentBackground;
   final double strokeWidth;
   final double padding;
   final bool showEndpoints;
@@ -260,12 +273,14 @@ class _RouteSketchPainter extends CustomPainter {
       final start = offsets.first;
       final end = offsets.last;
 
-      // Start marker (ringed dot).
-      canvas.drawCircle(
-        start,
-        strokeWidth + 2,
-        Paint()..color = backgroundColor,
-      );
+      // Start marker (ringed dot on opaque canvases; clean dot on transparent stickers).
+      if (!transparentBackground) {
+        canvas.drawCircle(
+          start,
+          strokeWidth + 2,
+          Paint()..color = backgroundColor,
+        );
+      }
       canvas.drawCircle(start, strokeWidth + 0.5, Paint()..color = startColor);
 
       // End / current position marker.
@@ -276,11 +291,13 @@ class _RouteSketchPainter extends CustomPainter {
           Paint()..color = endColor.withValues(alpha: 0.25),
         );
       }
-      canvas.drawCircle(
-        end,
-        strokeWidth + 2.5,
-        Paint()..color = backgroundColor,
-      );
+      if (!transparentBackground) {
+        canvas.drawCircle(
+          end,
+          strokeWidth + 2.5,
+          Paint()..color = backgroundColor,
+        );
+      }
       canvas.drawCircle(end, strokeWidth + 1, Paint()..color = endColor);
     }
   }
@@ -290,6 +307,7 @@ class _RouteSketchPainter extends CustomPainter {
     return oldDelegate.points != points ||
         oldDelegate.strokeColor != strokeColor ||
         oldDelegate.gridColor != gridColor ||
+        oldDelegate.transparentBackground != transparentBackground ||
         oldDelegate.isLive != isLive;
   }
 }

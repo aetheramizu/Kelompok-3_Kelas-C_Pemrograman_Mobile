@@ -96,6 +96,7 @@ class NearPaceController extends ChangeNotifier {
     _checkInitialLocationPermission();
     _initSyncCoordinator(syncCoordinator);
     _loadPendingActivities();
+    unawaited(weatherCacheService?.initialize());
   }
 
   final FirebaseBootstrapStatus firebaseStatus;
@@ -210,6 +211,8 @@ class NearPaceController extends ChangeNotifier {
   StreamSubscription<ForegroundNotice>? _pushSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<GeoPointLite>? _positionSubscription;
+  StreamSubscription<bool>? _syncOnlineSubscription;
+  bool _ownsSyncCoordinator = false;
 
   void _initForegroundService() {
     foregroundService?.initialize();
@@ -235,13 +238,15 @@ class NearPaceController extends ChangeNotifier {
   void _initSyncCoordinator(SyncCoordinator? custom) {
     if (custom != null) {
       _syncCoordinator = custom;
+      _ownsSyncCoordinator = false;
     } else if (connectivityService != null) {
       _syncCoordinator = NearPaceSyncCoordinator(
         connectivityService: connectivityService!,
         onSyncRequested: () => syncPendingActivities(),
       );
+      _ownsSyncCoordinator = true;
     }
-    _syncCoordinator?.isOnlineStream.listen((online) {
+    _syncOnlineSubscription = _syncCoordinator?.isOnlineStream.listen((online) {
       _isOffline = !online;
       notifyListeners();
     });
@@ -1597,6 +1602,10 @@ class NearPaceController extends ChangeNotifier {
     _pushSubscription?.cancel();
     _tokenRefreshSubscription?.cancel();
     _positionSubscription?.cancel();
+    _syncOnlineSubscription?.cancel();
+    if (_ownsSyncCoordinator) {
+      _syncCoordinator?.dispose();
+    }
     super.dispose();
   }
 }

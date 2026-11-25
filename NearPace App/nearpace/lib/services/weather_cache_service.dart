@@ -7,6 +7,9 @@ import '../domain/weather.dart';
 
 /// Contract for pre-caching 48-hour hourly weather forecasts for offline use.
 abstract interface class WeatherCacheService {
+  /// Hydrates any persisted forecast cache into memory for synchronous lookup.
+  Future<void> initialize();
+
   Future<void> saveHourlyForecast({
     required double latitude,
     required double longitude,
@@ -43,6 +46,9 @@ class PreferencesWeatherCacheService implements WeatherCacheService {
     _prefs = loaded;
     return loaded;
   }
+
+  @override
+  Future<void> initialize() => init();
 
   Future<void> init() async {
     final prefs = await _getPrefs();
@@ -166,6 +172,9 @@ class PreferencesWeatherCacheService implements WeatherCacheService {
 /// In-memory implementation of [WeatherCacheService] for unit tests.
 class InMemoryWeatherCacheService implements WeatherCacheService {
   Map<String, dynamic>? _cache;
+
+  @override
+  Future<void> initialize() async {}
 
   @override
   Future<void> saveHourlyForecast({

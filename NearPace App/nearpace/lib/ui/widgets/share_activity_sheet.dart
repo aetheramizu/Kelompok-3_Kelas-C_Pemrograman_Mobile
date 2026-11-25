@@ -116,7 +116,7 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
       final pace = NearPaceFormatters.paceWithUnit(
         widget.activity.avgPaceSecPerKm,
       );
-      final text = 'Ran $distanceKm with NearPace (avg pace $pace)! 🏃‍♂️⚡';
+      final text = 'Ran $distanceKm with NearPace (avg pace $pace)!';
 
       await SharePlus.instance.share(
         ShareParams(files: [XFile(file.path)], text: text),
@@ -201,27 +201,31 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
             ),
           ),
 
-          // Mode & Tone Switchers
+          // Mode Switcher
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: NearPaceSpacing.md),
             child: Row(
               children: [
-                // Mode Toggle
                 Expanded(
                   child: SegmentedButton<ShareCardMode>(
+                    showSelectedIcon: false,
                     segments: const [
                       ButtonSegment(
                         value: ShareCardMode.transparentSticker,
                         label: Text(
                           'Transparent Sticker',
-                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                       ButtonSegment(
                         value: ShareCardMode.darkBrandCard,
                         label: Text(
                           'Dark Brand Card',
-                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                     ],
@@ -253,7 +257,14 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
                   ChoiceChip(
                     label: const Text('Volt #B7F36B'),
                     selected: _overlayTone == OverlayTone.volt,
+                    showCheckmark: false,
                     selectedColor: colors.accent,
+                    backgroundColor: colors.surfaceElevated,
+                    side: BorderSide(
+                      color: _overlayTone == OverlayTone.volt
+                          ? colors.accent
+                          : colors.border,
+                    ),
                     labelStyle: TextStyle(
                       color: _overlayTone == OverlayTone.volt
                           ? colors.onAccent
@@ -268,7 +279,14 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
                   ChoiceChip(
                     label: const Text('Pure White'),
                     selected: _overlayTone == OverlayTone.white,
+                    showCheckmark: false,
                     selectedColor: const Color(0xFFF2F5F0),
+                    backgroundColor: colors.surfaceElevated,
+                    side: BorderSide(
+                      color: _overlayTone == OverlayTone.white
+                          ? const Color(0xFFF2F5F0)
+                          : colors.border,
+                    ),
                     labelStyle: TextStyle(
                       color: _overlayTone == OverlayTone.white
                           ? colors.onAccent
@@ -286,197 +304,197 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
 
           const SizedBox(height: NearPaceSpacing.sm),
 
-          // Card preview viewport
+          // Card preview viewport: checkerboard lives OUTSIDE RepaintBoundary
+          // so exported transparent PNGs stay 100% alpha-transparent.
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: NearPaceSpacing.md,
               ),
               child: Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    // Checkerboard in UI preview only when transparent
-                    color: isTransparent
-                        ? const Color(0xFF1E2320)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(
-                      NearPaceSpacing.radiusMd,
-                    ),
-                    border: Border.all(color: colors.border),
-                  ),
-                  padding: const EdgeInsets.all(NearPaceSpacing.md),
-                  child: RepaintBoundary(
-                    key: _cardKey,
-                    child: Container(
-                      width: 280,
-                      padding: const EdgeInsets.all(NearPaceSpacing.md),
-                      decoration: BoxDecoration(
-                        color: isTransparent
-                            ? Colors.transparent
-                            : colors.background,
-                        borderRadius: BorderRadius.circular(
-                          isTransparent ? 0 : NearPaceSpacing.radiusMd,
-                        ),
-                        border: isTransparent
-                            ? null
-                            : Border.all(color: colors.border, width: 1.5),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusMd),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isTransparent
+                          ? Colors.transparent
+                          : colors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(
+                        NearPaceSpacing.radiusMd,
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Branding header
-                          Row(
-                            children: [
-                              NearPaceLogo(
-                                size: 28,
-                                strokeColor: isTransparent
-                                    ? overlayColor
-                                    : colors.accent,
-                                dotColor: isTransparent
-                                    ? overlayColor
-                                    : colors.performanceGreen,
-                              ),
-                              const SizedBox(width: NearPaceSpacing.xs),
-                              Text(
-                                'NearPace',
-                                style: textTheme.titleSmall?.copyWith(
-                                  color: isTransparent
-                                      ? overlayColor
-                                      : colors.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                date,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: isTransparent
-                                      ? overlayColor.withValues(alpha: 0.8)
-                                      : colors.textMuted,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: NearPaceSpacing.md),
-
-                          // Route sketch
-                          Center(
-                            child: SizedBox(
-                              width: 220,
-                              height: 140,
-                              child: RouteSketch(
-                                route: activity.route,
-                                showGrid: !isTransparent,
-                                compact: true,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: NearPaceSpacing.md),
-
-                          // Distance Hero
-                          Text(
-                            distance,
-                            style: textTheme.headlineMedium?.copyWith(
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: CustomPaint(
+                      key: const ValueKey('share-preview-checkerboard'),
+                      painter: isTransparent
+                          ? const _TransparencyCheckerboardPainter()
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(NearPaceSpacing.md),
+                        child: RepaintBoundary(
+                          key: _cardKey,
+                          child: Container(
+                            width: 296,
+                            padding: const EdgeInsets.all(NearPaceSpacing.md),
+                            decoration: BoxDecoration(
                               color: isTransparent
-                                  ? overlayColor
-                                  : colors.textPrimary,
-                              fontWeight: FontWeight.w900,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
+                                  ? Colors.transparent
+                                  : colors.background,
+                              borderRadius: BorderRadius.circular(
+                                isTransparent ? 0 : NearPaceSpacing.radiusMd,
+                              ),
+                              border: isTransparent
+                                  ? null
+                                  : Border.all(
+                                      color: colors.border,
+                                      width: 1.5,
+                                    ),
                             ),
-                          ),
-
-                          const SizedBox(height: NearPaceSpacing.xs),
-
-                          // Duration & Pace row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'TIME',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: isTransparent
-                                          ? overlayColor.withValues(alpha: 0.7)
-                                          : colors.textMuted,
-                                      fontSize: 9,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                  Text(
-                                    duration,
-                                    style: textTheme.titleSmall?.copyWith(
-                                      color: isTransparent
-                                          ? overlayColor
-                                          : colors.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'AVG PACE',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: isTransparent
-                                          ? overlayColor.withValues(alpha: 0.7)
-                                          : colors.textMuted,
-                                      fontSize: 9,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                  Text(
-                                    pace,
-                                    style: textTheme.titleSmall?.copyWith(
-                                      color: isTransparent
-                                          ? overlayColor
-                                          : colors.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (activity.city != null &&
-                                  activity.city!.isNotEmpty)
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Branding header
+                                Row(
                                   children: [
-                                    Text(
-                                      'CITY',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: isTransparent
-                                            ? overlayColor.withValues(
-                                                alpha: 0.7,
-                                              )
-                                            : colors.textMuted,
-                                        fontSize: 9,
-                                        letterSpacing: 1.0,
-                                      ),
+                                    NearPaceLogo(
+                                      size: 26,
+                                      strokeColor: isTransparent
+                                          ? overlayColor
+                                          : colors.accent,
+                                      dotColor: isTransparent
+                                          ? overlayColor
+                                          : colors.performanceGreen,
                                     ),
+                                    const SizedBox(width: NearPaceSpacing.xs),
                                     Text(
-                                      activity.city!,
+                                      'NearPace',
                                       style: textTheme.titleSmall?.copyWith(
                                         color: isTransparent
                                             ? overlayColor
                                             : colors.textPrimary,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                    const SizedBox(width: NearPaceSpacing.xs),
+                                    Expanded(
+                                      child: Text(
+                                        date,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.right,
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: isTransparent
+                                              ? overlayColor.withValues(
+                                                  alpha: 0.8,
+                                                )
+                                              : colors.textMuted,
+                                          fontSize: 10,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
-                            ],
+
+                                const SizedBox(height: NearPaceSpacing.md),
+
+                                // Route sketch (transparent & tone-matched in sticker mode)
+                                Center(
+                                  child: SizedBox(
+                                    width: 236,
+                                    height: 140,
+                                    child: RouteSketch(
+                                      route: activity.route,
+                                      height: 140,
+                                      showGrid: !isTransparent,
+                                      compact: true,
+                                      transparentBackground: isTransparent,
+                                      strokeColorOverride: isTransparent
+                                          ? overlayColor
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: NearPaceSpacing.md),
+
+                                // Distance Hero
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    distance,
+                                    style: textTheme.headlineMedium?.copyWith(
+                                      color: isTransparent
+                                          ? overlayColor
+                                          : colors.textPrimary,
+                                      fontWeight: FontWeight.w900,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: NearPaceSpacing.xs),
+
+                                // Duration, Pace, and optional City row
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _ShareStatItem(
+                                        label: 'TIME',
+                                        value: duration,
+                                        labelColor: isTransparent
+                                            ? overlayColor.withValues(
+                                                alpha: 0.72,
+                                              )
+                                            : colors.textMuted,
+                                        valueColor: isTransparent
+                                            ? overlayColor
+                                            : colors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: NearPaceSpacing.xs),
+                                    Expanded(
+                                      child: _ShareStatItem(
+                                        label: 'AVG PACE',
+                                        value: pace,
+                                        labelColor: isTransparent
+                                            ? overlayColor.withValues(
+                                                alpha: 0.72,
+                                              )
+                                            : colors.textMuted,
+                                        valueColor: isTransparent
+                                            ? overlayColor
+                                            : colors.textPrimary,
+                                      ),
+                                    ),
+                                    if (activity.city != null &&
+                                        activity.city!.trim().isNotEmpty) ...[
+                                      const SizedBox(width: NearPaceSpacing.xs),
+                                      Expanded(
+                                        child: _ShareStatItem(
+                                          label: 'CITY',
+                                          value: activity.city!.trim(),
+                                          labelColor: isTransparent
+                                              ? overlayColor.withValues(
+                                                  alpha: 0.72,
+                                                )
+                                              : colors.textMuted,
+                                          valueColor: isTransparent
+                                              ? overlayColor
+                                              : colors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -487,8 +505,11 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
 
           if (_statusNotice != null)
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: NearPaceSpacing.md,
+              padding: const EdgeInsets.fromLTRB(
+                NearPaceSpacing.md,
+                NearPaceSpacing.xs,
+                NearPaceSpacing.md,
+                0,
               ),
               child: Text(
                 _statusNotice!,
@@ -504,7 +525,7 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
           Padding(
             padding: EdgeInsets.fromLTRB(
               NearPaceSpacing.md,
-              NearPaceSpacing.xs,
+              NearPaceSpacing.sm,
               NearPaceSpacing.md,
               MediaQuery.of(context).padding.bottom + NearPaceSpacing.md,
             ),
@@ -560,4 +581,82 @@ class _ShareActivitySheetState extends State<ShareActivitySheet> {
       ),
     );
   }
+}
+
+class _ShareStatItem extends StatelessWidget {
+  const _ShareStatItem({
+    required this.label,
+    required this.value,
+    required this.labelColor,
+    required this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color labelColor;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.labelSmall?.copyWith(
+            color: labelColor,
+            fontSize: 9,
+            letterSpacing: 1.0,
+          ),
+        ),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.titleSmall?.copyWith(
+            color: valueColor,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Paints a subtle dark checkerboard exclusively behind the UI preview to
+/// communicate PNG alpha transparency without affecting captured image bytes.
+class _TransparencyCheckerboardPainter extends CustomPainter {
+  const _TransparencyCheckerboardPainter();
+
+  static const _tileSize = 12.0;
+  static const _darkTile = Color(0xFF1A1F1C);
+  static const _lightTile = Color(0xFF252C28);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final darkPaint = Paint()..color = _darkTile;
+    final lightPaint = Paint()..color = _lightTile;
+
+    final cols = (size.width / _tileSize).ceil();
+    final rows = (size.height / _tileSize).ceil();
+
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        final isEven = (row + col).isEven;
+        canvas.drawRect(
+          Rect.fromLTWH(col * _tileSize, row * _tileSize, _tileSize, _tileSize),
+          isEven ? darkPaint : lightPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TransparencyCheckerboardPainter oldDelegate) =>
+      false;
 }
