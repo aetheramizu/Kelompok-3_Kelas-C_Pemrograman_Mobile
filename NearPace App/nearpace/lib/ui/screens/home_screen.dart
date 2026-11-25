@@ -7,6 +7,7 @@ import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/metric_tile.dart';
+import '../widgets/nearpace_avatar.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/state_views.dart';
 import '../widgets/weekly_distance_chart.dart';
@@ -135,30 +136,11 @@ class HomeScreen extends StatelessWidget {
                             Semantics(
                               button: true,
                               label: 'Open profile',
-                              child: InkWell(
+                              child: NearPaceAvatar(
+                                avatarId: profile.avatarId,
+                                name: profile.displayName,
+                                size: NearPaceSpacing.minTapTarget,
                                 onTap: () => controller.setTabIndex(3),
-                                customBorder: const CircleBorder(),
-                                child: Container(
-                                  width: NearPaceSpacing.minTapTarget,
-                                  height: NearPaceSpacing.minTapTarget,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: colors.deepGreenSurface,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: colors.accentText.withValues(
-                                        alpha: 0.4,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    profile.initials,
-                                    style: textTheme.titleSmall?.copyWith(
-                                      color: colors.accentText,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
                               ),
                             ),
                           ],

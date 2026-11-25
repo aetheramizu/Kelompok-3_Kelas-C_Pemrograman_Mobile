@@ -8,6 +8,7 @@ class UserProfile {
     required this.displayName,
     required this.city,
     required this.showOnLeaderboard,
+    this.avatarId,
     this.fcmToken,
     this.runReminder = const RunReminder(),
     this.receiveUpdates = true,
@@ -18,6 +19,7 @@ class UserProfile {
   final String displayName;
   final String city;
   final bool showOnLeaderboard;
+  final String? avatarId;
   final String? fcmToken;
   final RunReminder runReminder;
   final bool receiveUpdates;
@@ -36,6 +38,7 @@ class UserProfile {
     String? displayName,
     String? city,
     bool? showOnLeaderboard,
+    String? avatarId,
     String? fcmToken,
     RunReminder? runReminder,
     bool? receiveUpdates,
@@ -45,6 +48,7 @@ class UserProfile {
     displayName: displayName ?? this.displayName,
     city: city ?? this.city,
     showOnLeaderboard: showOnLeaderboard ?? this.showOnLeaderboard,
+    avatarId: avatarId ?? this.avatarId,
     fcmToken: fcmToken ?? this.fcmToken,
     runReminder: runReminder ?? this.runReminder,
     receiveUpdates: receiveUpdates ?? this.receiveUpdates,
@@ -55,6 +59,7 @@ class UserProfile {
     'displayName': displayName,
     'city': city,
     'showOnLeaderboard': showOnLeaderboard,
+    if (avatarId != null) 'avatarId': avatarId,
     if (fcmToken != null) 'fcmToken': fcmToken,
     'runReminder': runReminder.toMap(),
     'receiveUpdates': receiveUpdates,
@@ -67,6 +72,7 @@ class UserProfile {
         displayName: map['displayName'] as String? ?? 'Runner',
         city: map['city'] as String? ?? '',
         showOnLeaderboard: map['showOnLeaderboard'] as bool? ?? false,
+        avatarId: map['avatarId'] as String?,
         fcmToken: map['fcmToken'] as String?,
         runReminder: RunReminder.fromMap(
           map['runReminder'] is Map

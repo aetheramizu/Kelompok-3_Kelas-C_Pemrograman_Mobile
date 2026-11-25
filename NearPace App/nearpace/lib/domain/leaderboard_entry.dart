@@ -10,6 +10,7 @@ class LeaderboardEntry {
     required this.distanceM,
     required this.runCount,
     required this.updatedAt,
+    this.avatarId,
   });
 
   final String uid;
@@ -19,6 +20,7 @@ class LeaderboardEntry {
   final double distanceM;
   final int runCount;
   final DateTime updatedAt;
+  final String? avatarId;
 
   String get documentId => '${weekKey}_$uid';
 
@@ -34,6 +36,26 @@ class LeaderboardEntry {
     return '$first$last'.toUpperCase();
   }
 
+  LeaderboardEntry copyWith({
+    String? uid,
+    String? displayName,
+    String? city,
+    String? weekKey,
+    double? distanceM,
+    int? runCount,
+    DateTime? updatedAt,
+    String? avatarId,
+  }) => LeaderboardEntry(
+    uid: uid ?? this.uid,
+    displayName: displayName ?? this.displayName,
+    city: city ?? this.city,
+    weekKey: weekKey ?? this.weekKey,
+    distanceM: distanceM ?? this.distanceM,
+    runCount: runCount ?? this.runCount,
+    updatedAt: updatedAt ?? this.updatedAt,
+    avatarId: avatarId ?? this.avatarId,
+  );
+
   Map<String, dynamic> toMap() => {
     'uid': uid,
     'displayName': displayName,
@@ -42,6 +64,7 @@ class LeaderboardEntry {
     'distanceM': distanceM,
     'runCount': runCount,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
+    if (avatarId != null) 'avatarId': avatarId,
   };
 
   static LeaderboardEntry fromMap(Map<String, dynamic> map) => LeaderboardEntry(
@@ -54,5 +77,6 @@ class LeaderboardEntry {
     updatedAt:
         DateTime.tryParse(map['updatedAt'] as String? ?? '')?.toLocal() ??
         DateTime.now(),
+    avatarId: map['avatarId'] as String?,
   );
 }

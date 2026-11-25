@@ -385,7 +385,7 @@ void main() {
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Edit name and city'));
+      await tester.tap(find.text('Edit profile'));
       await tester.pumpAndSettle();
       expect(find.text('Edit profile'), findsOneWidget);
 

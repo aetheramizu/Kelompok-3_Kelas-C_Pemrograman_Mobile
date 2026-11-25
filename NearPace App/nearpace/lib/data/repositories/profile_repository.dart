@@ -15,6 +15,7 @@ abstract interface class ProfileRepository {
     required String displayName,
     required String city,
   });
+  Future<void> updateAvatar(String uid, String avatarId);
   Future<void> setShowOnLeaderboard(String uid, bool show);
   Future<void> updateFcmToken(String uid, String? token);
   Future<void> updateNotificationPreferences(
@@ -74,6 +75,14 @@ class FirestoreProfileRepository implements ProfileRepository {
     await _userDoc(uid).set({
       'displayName': displayName.trim(),
       'city': city.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> updateAvatar(String uid, String avatarId) async {
+    await _userDoc(uid).set({
+      'avatarId': avatarId,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -153,6 +162,14 @@ class MockProfileRepository implements ProfileRepository {
         displayName: displayName.trim(),
         city: city.trim(),
       );
+      _controller.add(_profile);
+    }
+  }
+
+  @override
+  Future<void> updateAvatar(String uid, String avatarId) async {
+    if (_profile != null) {
+      _profile = _profile!.copyWith(avatarId: avatarId);
       _controller.add(_profile);
     }
   }

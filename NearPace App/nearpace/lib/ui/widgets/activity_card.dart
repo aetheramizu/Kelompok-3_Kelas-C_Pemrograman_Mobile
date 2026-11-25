@@ -6,6 +6,7 @@ import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
 import 'nearpace_card.dart';
 import 'route_sketch.dart';
+import 'share_activity_sheet.dart';
 import 'weather_badge.dart';
 
 /// Reusable run summary row displayed on Home and History screens.
@@ -118,6 +119,12 @@ class ActivityCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: NearPaceSpacing.xxs),
+          IconButton(
+            tooltip: 'Share run',
+            icon: Icon(Icons.share_outlined, color: colors.textMuted, size: 18),
+            onPressed: () =>
+                ShareActivitySheet.show(context, activity: activity),
+          ),
           ExcludeSemantics(
             child: Icon(
               Icons.chevron_right_rounded,

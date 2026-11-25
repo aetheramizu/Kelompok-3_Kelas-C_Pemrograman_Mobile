@@ -47,6 +47,7 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
       'distanceM': entry.distanceM,
       'runCount': entry.runCount,
       'updatedAt': Timestamp.fromDate(entry.updatedAt.toUtc()),
+      if (entry.avatarId != null) 'avatarId': entry.avatarId,
     };
     await _leaderboardCol
         .doc(docId)
@@ -82,6 +83,7 @@ class FirestoreLeaderboardRepository implements LeaderboardRepository {
       distanceM: (map['distanceM'] as num?)?.toDouble() ?? 0.0,
       runCount: (map['runCount'] as num?)?.toInt() ?? 0,
       updatedAt: updatedAt,
+      avatarId: map['avatarId'] as String?,
     );
   }
 }

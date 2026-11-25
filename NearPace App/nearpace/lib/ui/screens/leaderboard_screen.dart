@@ -6,6 +6,7 @@ import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
+import '../widgets/nearpace_avatar.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/state_views.dart';
 
@@ -21,7 +22,6 @@ class LeaderboardScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final profile = controller.profile;
     final entries = controller.filteredLeaderboardEntries;
-    final cities = controller.availableCities;
     final selectedCity = controller.selectedCity;
 
     return LayoutBuilder(
@@ -183,31 +183,21 @@ class LeaderboardScreen extends StatelessWidget {
                           const SizedBox(height: NearPaceSpacing.md),
                         ],
 
-                        // City filter bar.
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _CityChip(
-                                label: 'All cities',
-                                selected: selectedCity == null,
-                                onTap: () => controller.setSelectedCity(null),
-                              ),
-                              ...cities.map(
-                                (city) => Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: NearPaceSpacing.xs,
-                                  ),
-                                  child: _CityChip(
-                                    label: city,
-                                    selected: selectedCity == city,
-                                    onTap: () =>
-                                        controller.setSelectedCity(city),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        // Compact City Selector Pill
+                        Row(
+                          children: [
+                            _CitySelectorPill(
+                              selectedCity: selectedCity,
+                              runnerCount: entries.length,
+                              onTap: () {
+                                _showCitySearchSheet(
+                                  context,
+                                  controller: controller,
+                                  userCity: profile.city,
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -302,33 +292,442 @@ class LeaderboardScreen extends StatelessWidget {
   }
 }
 
-class _CityChip extends StatelessWidget {
-  const _CityChip({
-    required this.label,
-    required this.selected,
+class _CitySelectorPill extends StatelessWidget {
+  const _CitySelectorPill({
+    required this.selectedCity,
+    required this.runnerCount,
     required this.onTap,
   });
 
-  final String label;
-  final bool selected;
+  final String? selectedCity;
+  final int runnerCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.npColors;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      labelStyle: TextStyle(
-        color: selected ? colors.onAccent : colors.textSecondary,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-        fontSize: 13,
+    final textTheme = Theme.of(context).textTheme;
+    final label = selectedCity != null
+        ? '$selectedCity ($runnerCount)'
+        : 'All Indonesia ($runnerCount)';
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(NearPaceSpacing.radiusPill),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: colors.surfaceElevated,
+          borderRadius: BorderRadius.circular(NearPaceSpacing.radiusPill),
+          border: Border.all(
+            color: selectedCity != null ? colors.accent : colors.border,
+            width: selectedCity != null ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.location_on_rounded,
+              size: 16,
+              color: selectedCity != null
+                  ? colors.accent
+                  : colors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: textTheme.labelLarge?.copyWith(
+                color: selectedCity != null
+                    ? colors.accentText
+                    : colors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: colors.textSecondary,
+            ),
+          ],
+        ),
       ),
-      selectedColor: colors.accent,
-      backgroundColor: colors.surface,
-      side: BorderSide(color: selected ? colors.accent : colors.border),
-      onSelected: (_) => onTap(),
+    );
+  }
+}
+
+void _showCitySearchSheet(
+  BuildContext context, {
+  required NearPaceController controller,
+  required String userCity,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      return _SearchableCityFilterSheet(
+        controller: controller,
+        userCity: userCity,
+      );
+    },
+  );
+}
+
+class _SearchableCityFilterSheet extends StatefulWidget {
+  const _SearchableCityFilterSheet({
+    required this.controller,
+    required this.userCity,
+  });
+
+  final NearPaceController controller;
+  final String userCity;
+
+  @override
+  State<_SearchableCityFilterSheet> createState() =>
+      _SearchableCityFilterSheetState();
+}
+
+class _SearchableCityFilterSheetState
+    extends State<_SearchableCityFilterSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.npColors;
+    final textTheme = Theme.of(context).textTheme;
+    final controller = widget.controller;
+    final selectedCity = controller.selectedCity;
+    final availableCities = controller.availableCities;
+    final allEntries = controller.leaderboardEntries;
+
+    final filteredCities = availableCities.where((c) {
+      if (_query.isEmpty) return true;
+      return c.toLowerCase().contains(_query);
+    }).toList();
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(NearPaceSpacing.radiusLg),
+        ),
+        border: Border(
+          top: BorderSide(color: colors.border),
+          left: BorderSide(color: colors.border),
+          right: BorderSide(color: colors.border),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Padding(
+            padding: const EdgeInsets.only(top: NearPaceSpacing.sm),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              NearPaceSpacing.md,
+              NearPaceSpacing.sm,
+              NearPaceSpacing.md,
+              NearPaceSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Filter by City', style: textTheme.titleMedium),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  color: colors.textSecondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+
+          // Search Field
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NearPaceSpacing.md,
+              vertical: NearPaceSpacing.xs,
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              style: textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: 'Search city...',
+                hintStyle: textTheme.bodyMedium?.copyWith(
+                  color: colors.textMuted,
+                ),
+                prefixIcon: Icon(Icons.search_rounded, color: colors.textMuted),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () => _searchCtrl.clear(),
+                      )
+                    : null,
+                filled: true,
+                fillColor: colors.surfaceElevated,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: NearPaceSpacing.sm,
+                  vertical: NearPaceSpacing.xs,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+                  borderSide: BorderSide(color: colors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+                  borderSide: BorderSide(color: colors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+                  borderSide: BorderSide(color: colors.accent),
+                ),
+              ),
+            ),
+          ),
+
+          // Pinned Shortcuts
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NearPaceSpacing.md,
+              vertical: NearPaceSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _PinnedCityTile(
+                    label: 'All Indonesia',
+                    count: allEntries.length,
+                    isSelected: selectedCity == null,
+                    icon: Icons.flag_outlined,
+                    onTap: () {
+                      controller.setSelectedCity(null);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+                if (widget.userCity.isNotEmpty) ...[
+                  const SizedBox(width: NearPaceSpacing.sm),
+                  Expanded(
+                    child: _PinnedCityTile(
+                      label: widget.userCity,
+                      count: allEntries
+                          .where(
+                            (e) =>
+                                e.city.toLowerCase() ==
+                                widget.userCity.toLowerCase(),
+                          )
+                          .length,
+                      isSelected:
+                          selectedCity != null &&
+                          selectedCity.toLowerCase() ==
+                              widget.userCity.toLowerCase(),
+                      icon: Icons.home_outlined,
+                      onTap: () {
+                        controller.setSelectedCity(widget.userCity);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const Divider(),
+
+          // City list
+          Expanded(
+            child: filteredCities.isEmpty
+                ? Center(
+                    child: Text(
+                      'No active runners found in "${_searchCtrl.text}"',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colors.textMuted,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NearPaceSpacing.md,
+                      vertical: NearPaceSpacing.xs,
+                    ),
+                    itemCount: filteredCities.length,
+                    separatorBuilder: (context, index) =>
+                        Divider(color: colors.border, height: 1),
+                    itemBuilder: (context, index) {
+                      final city = filteredCities[index];
+                      final isSelected =
+                          selectedCity != null &&
+                          selectedCity.toLowerCase() == city.toLowerCase();
+                      final count = allEntries
+                          .where(
+                            (e) => e.city.toLowerCase() == city.toLowerCase(),
+                          )
+                          .length;
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: NearPaceSpacing.xs,
+                          vertical: 2,
+                        ),
+                        title: Text(
+                          city,
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: isSelected
+                                ? colors.accentText
+                                : colors.textPrimary,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.surfaceElevated,
+                                borderRadius: BorderRadius.circular(
+                                  NearPaceSpacing.radiusPill,
+                                ),
+                              ),
+                              child: Text(
+                                '$count ${count == 1 ? 'runner' : 'runners'}',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            if (isSelected) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: colors.accent,
+                                size: 18,
+                              ),
+                            ],
+                          ],
+                        ),
+                        onTap: () {
+                          controller.setSelectedCity(city);
+                          Navigator.of(context).pop();
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PinnedCityTile extends StatelessWidget {
+  const _PinnedCityTile({
+    required this.label,
+    required this.count,
+    required this.isSelected,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool isSelected;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.npColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? colors.deepGreenSurface : colors.surfaceElevated,
+          borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+          border: Border.all(
+            color: isSelected ? colors.accent : colors.border,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? colors.accent : colors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: isSelected
+                          ? colors.accentText
+                          : colors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '$count runners',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.textMuted,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -391,15 +790,10 @@ class _TopRunnersStrip extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: NearPaceSpacing.xs),
-                  CircleAvatar(
-                    radius: isFirst ? 20 : 17,
-                    backgroundColor: colors.surfaceElevated,
-                    child: Text(
-                      entry.initials,
-                      style: textTheme.labelMedium?.copyWith(
-                        color: isFirst ? colors.accentText : colors.textPrimary,
-                      ),
-                    ),
+                  NearPaceAvatar(
+                    avatarId: entry.avatarId,
+                    name: entry.displayName,
+                    size: isFirst ? 42 : 36,
                   ),
                   const SizedBox(height: NearPaceSpacing.xs),
                   Text(
@@ -483,15 +877,10 @@ class _LeaderboardRow extends StatelessWidget {
                 ),
               ),
             ),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: colors.surfaceElevated,
-              child: Text(
-                entry.initials,
-                style: textTheme.labelMedium?.copyWith(
-                  color: colors.textPrimary,
-                ),
-              ),
+            NearPaceAvatar(
+              avatarId: entry.avatarId,
+              name: entry.displayName,
+              size: 36,
             ),
             const SizedBox(width: NearPaceSpacing.sm),
             Expanded(

@@ -9,6 +9,7 @@ import '../../utils/formatters.dart';
 import '../widgets/metric_tile.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/route_sketch.dart';
+import '../widgets/share_activity_sheet.dart';
 import '../widgets/weather_badge.dart';
 
 /// Displays a completed or saved run with metrics, route sketch, and start-point
@@ -224,6 +225,12 @@ class _RunResultScreenState extends State<RunResultScreen> {
             ),
           ),
           actions: [
+            IconButton(
+              tooltip: 'Share run',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () =>
+                  ShareActivitySheet.show(context, activity: activity),
+            ),
             if (!isUnsaved)
               IconButton(
                 tooltip: 'Remove run',

@@ -632,6 +632,7 @@ class NearPaceController extends ChangeNotifier {
         LeaderboardEntry(
           uid: _profile.uid,
           displayName: _profile.displayName,
+          avatarId: _profile.avatarId,
           city: currentLeaderboardCity,
           weekKey: currentWeekKey,
           distanceM: weeklyPublicDistanceMeters > 0
@@ -647,6 +648,8 @@ class NearPaceController extends ChangeNotifier {
     list.sort((a, b) => b.distanceM.compareTo(a.distanceM));
     return list;
   }
+
+  List<LeaderboardEntry> get leaderboardEntries => allLeaderboardEntries;
 
   List<String> get availableCities {
     final cities = <String>{};
@@ -868,6 +871,20 @@ class NearPaceController extends ChangeNotifier {
     }
   }
 
+  Future<void> updateAvatar(String avatarId) async {
+    if (_profile.avatarId == avatarId) return;
+    _profile = _profile.copyWith(avatarId: avatarId);
+    notifyListeners();
+
+    final profRepo = profileRepository;
+    if (!_isLocalPreview && profRepo != null && _profile.uid.isNotEmpty) {
+      await profRepo.updateAvatar(_profile.uid, avatarId);
+      if (_profile.showOnLeaderboard) {
+        await _syncLeaderboardEntry();
+      }
+    }
+  }
+
   Future<void> setShowOnLeaderboard(bool value) async {
     if (_profile.showOnLeaderboard == value) return;
     _profile = _profile.copyWith(showOnLeaderboard: value);
@@ -906,6 +923,7 @@ class NearPaceController extends ChangeNotifier {
           ? weeklyPublicActivities.length
           : weeklyActivities.length,
       updatedAt: now,
+      avatarId: _profile.avatarId,
     );
     // Update in-memory leaderboard immediately so it is reflected in UI
     final existingIdx = _leaderboardBase.indexWhere(
