@@ -6,7 +6,10 @@ import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
+import '../widgets/avatar_picker_sheet.dart';
+import '../widgets/city_picker_sheet.dart';
 import '../widgets/metric_tile.dart';
+import '../widgets/nearpace_avatar.dart';
 import '../widgets/nearpace_card.dart';
 import '../widgets/state_views.dart';
 
@@ -149,26 +152,47 @@ class ProfileScreen extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: colors.deepGreenSurface,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: colors.accentText.withValues(
-                                        alpha: 0.45,
+                                Stack(
+                                  children: [
+                                    NearPaceAvatar(
+                                      avatarId: profile.avatarId,
+                                      name: profile.displayName,
+                                      size: 64,
+                                      onTap: () async {
+                                        final newAvatarId =
+                                            await AvatarPickerSheet.show(
+                                              context,
+                                              currentAvatarId: profile.avatarId,
+                                            );
+                                        if (newAvatarId != null) {
+                                          await controller.updateAvatar(
+                                            newAvatarId,
+                                          );
+                                        }
+                                      },
+                                    ),
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: Container(
+                                        width: 20,
+                                        height: 20,
+                                        decoration: BoxDecoration(
+                                          color: colors.accent,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: colors.surface,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.edit_rounded,
+                                          size: 11,
+                                          color: colors.onAccent,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  child: Text(
-                                    profile.initials,
-                                    style: textTheme.titleLarge?.copyWith(
-                                      color: colors.accentText,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                                  ],
                                 ),
                                 const SizedBox(width: NearPaceSpacing.md),
                                 Expanded(
@@ -228,14 +252,44 @@ class ProfileScreen extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: NearPaceSpacing.md),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () =>
-                                    _openEditProfileSheet(context, controller),
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                label: const Text('Edit name and city'),
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _openEditProfileSheet(
+                                      context,
+                                      controller,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Edit profile'),
+                                  ),
+                                ),
+                                const SizedBox(width: NearPaceSpacing.sm),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final newAvatarId =
+                                          await AvatarPickerSheet.show(
+                                            context,
+                                            currentAvatarId: profile.avatarId,
+                                          );
+                                      if (newAvatarId != null) {
+                                        await controller.updateAvatar(
+                                          newAvatarId,
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.face_retouching_natural_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Avatar'),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -711,6 +765,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.npColors;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final textTheme = Theme.of(context).textTheme;
 
@@ -755,14 +810,53 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 },
               ),
               const SizedBox(height: NearPaceSpacing.sm),
-              TextFormField(
-                controller: _cityController,
-                textInputAction: TextInputAction.done,
-                maxLength: 60,
-                onFieldSubmitted: (_) => _submit(),
-                decoration: const InputDecoration(
-                  labelText: 'City (optional)',
-                  hintText: 'e.g. Makassar',
+              InkWell(
+                onTap: () async {
+                  final selected = await CityPickerSheet.show(
+                    context,
+                    currentCity: _cityController.text.isNotEmpty
+                        ? _cityController.text
+                        : null,
+                    title: 'Select City in Indonesia',
+                  );
+                  if (selected != null) {
+                    setState(() {
+                      _cityController.text = selected;
+                    });
+                  }
+                },
+                borderRadius: BorderRadius.circular(NearPaceSpacing.radiusSm),
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'City (optional)',
+                    hintText: 'Select Indonesian city...',
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_cityController.text.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () {
+                              setState(() {
+                                _cityController.clear();
+                              });
+                            },
+                          ),
+                        const Icon(Icons.location_city_rounded),
+                        const SizedBox(width: NearPaceSpacing.xs),
+                      ],
+                    ),
+                  ),
+                  child: Text(
+                    _cityController.text.isNotEmpty
+                        ? _cityController.text
+                        : 'Select your city (GPS auto-detect)',
+                    style: _cityController.text.isNotEmpty
+                        ? textTheme.bodyLarge
+                        : textTheme.bodyLarge?.copyWith(
+                            color: colors.textMuted,
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: NearPaceSpacing.md),

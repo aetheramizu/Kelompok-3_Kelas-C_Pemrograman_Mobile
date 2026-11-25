@@ -14,6 +14,7 @@ class Activity {
     this.weather,
     this.isPublic = true,
     this.city,
+    this.pendingSync = false,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class Activity {
   final WeatherSnapshot? weather;
   final bool isPublic;
   final String? city;
+  final bool pendingSync;
 
   double get distanceKm => distanceM / 1000;
 
@@ -35,23 +37,32 @@ class Activity {
 
   Activity copyWith({
     String? id,
+    DateTime? startedAt,
+    DateTime? endedAt,
+    double? distanceM,
+    int? durationS,
+    double? avgPaceSecPerKm,
+    List<GeoPointLite>? route,
     WeatherSnapshot? weather,
     bool? isPublic,
     String? city,
+    bool? pendingSync,
   }) => Activity(
     id: id ?? this.id,
-    startedAt: startedAt,
-    endedAt: endedAt,
-    distanceM: distanceM,
-    durationS: durationS,
-    avgPaceSecPerKm: avgPaceSecPerKm,
-    route: route,
+    startedAt: startedAt ?? this.startedAt,
+    endedAt: endedAt ?? this.endedAt,
+    distanceM: distanceM ?? this.distanceM,
+    durationS: durationS ?? this.durationS,
+    avgPaceSecPerKm: avgPaceSecPerKm ?? this.avgPaceSecPerKm,
+    route: route ?? this.route,
     weather: weather ?? this.weather,
     isPublic: isPublic ?? this.isPublic,
     city: city ?? this.city,
+    pendingSync: pendingSync ?? this.pendingSync,
   );
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'startedAt': startedAt.toUtc().toIso8601String(),
     'endedAt': endedAt.toUtc().toIso8601String(),
     'distanceM': distanceM,
@@ -61,9 +72,21 @@ class Activity {
     if (weather != null) 'weather': weather!.toMap(),
     'isPublic': isPublic,
     if (city != null) 'city': city,
+    'pendingSync': pendingSync,
   };
 
-  static Activity fromMap(String id, Map<String, dynamic> map) {
+  static Activity fromMap(dynamic first, [dynamic second]) {
+    final String id;
+    final Map<String, dynamic> map;
+    if (first is String && second is Map<String, dynamic>) {
+      id = first;
+      map = second;
+    } else if (first is Map<String, dynamic>) {
+      map = first;
+      id = (second is String ? second : null) ?? (map['id'] as String? ?? '');
+    } else {
+      throw ArgumentError('Invalid arguments to Activity.fromMap');
+    }
     final rawRoute = (map['route'] as List<dynamic>? ?? const []);
     return Activity(
       id: id,
@@ -78,6 +101,7 @@ class Activity {
       weather: WeatherSnapshot.fromMap(map['weather'] as Map<String, dynamic>?),
       isPublic: (map['isPublic'] as bool?) ?? true,
       city: map['city'] as String?,
+      pendingSync: (map['pendingSync'] as bool?) ?? false,
     );
   }
 }

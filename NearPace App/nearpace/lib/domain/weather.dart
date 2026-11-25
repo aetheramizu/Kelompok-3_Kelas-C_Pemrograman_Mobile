@@ -21,20 +21,39 @@ class WeatherSnapshot {
     required this.apparentC,
     required this.code,
     required this.fetchedAt,
+    this.isCachedForecast = false,
   });
 
   final double temperatureC;
   final double apparentC;
   final int code;
   final DateTime fetchedAt;
+  final bool isCachedForecast;
 
   String get label => weatherCodeLabel(code);
+
+  WeatherSnapshot copyWith({
+    double? temperatureC,
+    double? apparentC,
+    int? code,
+    DateTime? fetchedAt,
+    bool? isCachedForecast,
+  }) {
+    return WeatherSnapshot(
+      temperatureC: temperatureC ?? this.temperatureC,
+      apparentC: apparentC ?? this.apparentC,
+      code: code ?? this.code,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+      isCachedForecast: isCachedForecast ?? this.isCachedForecast,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
     'temperatureC': temperatureC,
     'apparentC': apparentC,
     'code': code,
     'fetchedAt': fetchedAt.toUtc().toIso8601String(),
+    'isCachedForecast': isCachedForecast,
   };
 
   static WeatherSnapshot? fromMap(Map<String, dynamic>? map) {
@@ -46,6 +65,7 @@ class WeatherSnapshot {
       apparentC: (map['apparentC'] as num).toDouble(),
       code: (map['code'] as num).toInt(),
       fetchedAt: fetched,
+      isCachedForecast: (map['isCachedForecast'] as bool?) ?? false,
     );
   }
 }

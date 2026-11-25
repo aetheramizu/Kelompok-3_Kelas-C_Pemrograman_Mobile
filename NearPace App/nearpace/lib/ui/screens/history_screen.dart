@@ -72,179 +72,227 @@ class _HistoryScreenState extends State<HistoryScreen> {
             constraints: const BoxConstraints(
               maxWidth: NearPaceSpacing.maxContentWidth,
             ),
-            child: CustomScrollView(
-              key: const ValueKey('history-scroll'),
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    gutter,
-                    NearPaceSpacing.md,
-                    gutter,
-                    NearPaceSpacing.sm,
-                  ),
-                  sliver: SliverList.list(
-                    children: [
-                      Text('History', style: textTheme.headlineMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Private saved runs, newest first',
-                        style: textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // Cumulative summary bar.
-                      NearPaceCard(
-                        padding: const EdgeInsets.all(NearPaceSpacing.md),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: MetricTile(
-                                label: 'Runs',
-                                value: '${allRuns.length}',
-                                compact: true,
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 36,
-                              color: colors.border,
-                            ),
-                            const SizedBox(width: NearPaceSpacing.md),
-                            Expanded(
-                              child: MetricTile(
-                                label: 'Distance',
-                                value: NearPaceFormatters.distanceKmValue(
-                                  controller.totalDistanceMeters,
-                                  decimals: 1,
-                                ),
-                                unit: 'km',
-                                highlight: true,
-                                compact: true,
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 36,
-                              color: colors.border,
-                            ),
-                            const SizedBox(width: NearPaceSpacing.md),
-                            Expanded(
-                              child: MetricTile(
-                                label: 'Total time',
-                                value: NearPaceFormatters.durationCompact(
-                                  totalDuration,
-                                ),
-                                compact: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // Filter chips.
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _FilterChipItem(
-                              label: 'All runs',
-                              selected: _filter == _HistoryFilter.all,
-                              onSelected: () =>
-                                  setState(() => _filter = _HistoryFilter.all),
-                            ),
-                            const SizedBox(width: NearPaceSpacing.xs),
-                            _FilterChipItem(
-                              label: 'This week',
-                              selected: _filter == _HistoryFilter.thisWeek,
-                              onSelected: () => setState(
-                                () => _filter = _HistoryFilter.thisWeek,
-                              ),
-                            ),
-                            const SizedBox(width: NearPaceSpacing.xs),
-                            _FilterChipItem(
-                              label: '5 km+',
-                              selected: _filter == _HistoryFilter.fiveKmPlus,
-                              onSelected: () => setState(
-                                () => _filter = _HistoryFilter.fiveKmPlus,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Main history content states.
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    gutter,
-                    NearPaceSpacing.xs,
-                    gutter,
-                    NearPaceSpacing.xxxl,
-                  ),
-                  sliver: switch (controller.historyState) {
-                    ViewLoadState.loading => const SliverToBoxAdapter(
-                      child: LoadingSkeletonList(itemCount: 4),
+            child: RefreshIndicator(
+              onRefresh: () => controller.syncPendingActivities(force: true),
+              child: CustomScrollView(
+                key: const ValueKey('history-scroll'),
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      gutter,
+                      NearPaceSpacing.md,
+                      gutter,
+                      NearPaceSpacing.sm,
                     ),
-                    ViewLoadState.error => SliverToBoxAdapter(
-                      child: ErrorStateView(
-                        title: 'Could not load activity history',
-                        message:
-                            controller.historyError ??
-                            'Check your connection and try again.',
-                        onRetry: controller.retryHistory,
-                      ),
-                    ),
-                    ViewLoadState.ready when allRuns.isEmpty =>
-                      SliverToBoxAdapter(
-                        child: EmptyStateView(
-                          icon: Icons.history_rounded,
-                          title: 'No saved runs yet',
-                          message:
-                              'Finished runs you save will appear here with '
-                              'their route sketch, pace, and weather.',
-                          actionLabel: 'Start a run',
-                          onAction: () => _openRecorder(context),
+                    sliver: SliverList.list(
+                      children: [
+                        Text('History', style: textTheme.headlineMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Private saved runs, newest first',
+                          style: textTheme.bodyMedium,
                         ),
-                      ),
-                    ViewLoadState.ready when filteredRuns.isEmpty =>
-                      SliverToBoxAdapter(
-                        child: EmptyStateView(
-                          icon: Icons.filter_list_off_rounded,
-                          title: 'No runs match this filter',
-                          message:
-                              'Try switching back to All runs to see your full '
-                              'history.',
-                          actionLabel: 'Show all runs',
-                          onAction: () =>
-                              setState(() => _filter = _HistoryFilter.all),
-                        ),
-                      ),
-                    ViewLoadState.ready => SliverList.separated(
-                      itemCount: filteredRuns.length,
-                      separatorBuilder: (_, _) =>
+                        if (controller.pendingSyncCount > 0) ...[
                           const SizedBox(height: NearPaceSpacing.sm),
-                      itemBuilder: (context, index) {
-                        final activity = filteredRuns[index];
-                        return ActivityCard(
-                          key: ValueKey(activity.id),
-                          activity: activity,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    RunResultScreen(activity: activity),
+                          NearPaceCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NearPaceSpacing.sm,
+                              vertical: NearPaceSpacing.xs,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.cloud_upload_outlined,
+                                  size: 18,
+                                  color: colors.warning,
+                                ),
+                                const SizedBox(width: NearPaceSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    '${controller.pendingSyncCount} ${controller.pendingSyncCount == 1 ? 'run' : 'runs'} waiting to sync',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colors.warning,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: controller.isSyncingActivities
+                                      ? null
+                                      : () => controller.syncPendingActivities(
+                                          force: true,
+                                        ),
+                                  child: controller.isSyncingActivities
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Sync now'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: NearPaceSpacing.md),
+
+                        // Cumulative summary bar.
+                        NearPaceCard(
+                          padding: const EdgeInsets.all(NearPaceSpacing.md),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: MetricTile(
+                                  label: 'Runs',
+                                  value: '${allRuns.length}',
+                                  compact: true,
+                                ),
                               ),
-                            );
-                          },
-                        );
-                      },
+                              Container(
+                                width: 1,
+                                height: 36,
+                                color: colors.border,
+                              ),
+                              const SizedBox(width: NearPaceSpacing.md),
+                              Expanded(
+                                child: MetricTile(
+                                  label: 'Distance',
+                                  value: NearPaceFormatters.distanceKmValue(
+                                    controller.totalDistanceMeters,
+                                    decimals: 1,
+                                  ),
+                                  unit: 'km',
+                                  highlight: true,
+                                  compact: true,
+                                ),
+                              ),
+                              Container(
+                                width: 1,
+                                height: 36,
+                                color: colors.border,
+                              ),
+                              const SizedBox(width: NearPaceSpacing.md),
+                              Expanded(
+                                child: MetricTile(
+                                  label: 'Total time',
+                                  value: NearPaceFormatters.durationCompact(
+                                    totalDuration,
+                                  ),
+                                  compact: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: NearPaceSpacing.md),
+
+                        // Filter chips.
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _FilterChipItem(
+                                label: 'All runs',
+                                selected: _filter == _HistoryFilter.all,
+                                onSelected: () => setState(
+                                  () => _filter = _HistoryFilter.all,
+                                ),
+                              ),
+                              const SizedBox(width: NearPaceSpacing.xs),
+                              _FilterChipItem(
+                                label: 'This week',
+                                selected: _filter == _HistoryFilter.thisWeek,
+                                onSelected: () => setState(
+                                  () => _filter = _HistoryFilter.thisWeek,
+                                ),
+                              ),
+                              const SizedBox(width: NearPaceSpacing.xs),
+                              _FilterChipItem(
+                                label: '5 km+',
+                                selected: _filter == _HistoryFilter.fiveKmPlus,
+                                onSelected: () => setState(
+                                  () => _filter = _HistoryFilter.fiveKmPlus,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  },
-                ),
-              ],
+                  ),
+
+                  // Main history content states.
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      gutter,
+                      NearPaceSpacing.xs,
+                      gutter,
+                      NearPaceSpacing.xxxl,
+                    ),
+                    sliver: switch (controller.historyState) {
+                      ViewLoadState.loading => const SliverToBoxAdapter(
+                        child: LoadingSkeletonList(itemCount: 4),
+                      ),
+                      ViewLoadState.error => SliverToBoxAdapter(
+                        child: ErrorStateView(
+                          title: 'Could not load activity history',
+                          message:
+                              controller.historyError ??
+                              'Check your connection and try again.',
+                          onRetry: controller.retryHistory,
+                        ),
+                      ),
+                      ViewLoadState.ready when allRuns.isEmpty =>
+                        SliverToBoxAdapter(
+                          child: EmptyStateView(
+                            icon: Icons.history_rounded,
+                            title: 'No saved runs yet',
+                            message:
+                                'Finished runs you save will appear here with '
+                                'their route sketch, pace, and weather.',
+                            actionLabel: 'Start a run',
+                            onAction: () => _openRecorder(context),
+                          ),
+                        ),
+                      ViewLoadState.ready when filteredRuns.isEmpty =>
+                        SliverToBoxAdapter(
+                          child: EmptyStateView(
+                            icon: Icons.filter_list_off_rounded,
+                            title: 'No runs match this filter',
+                            message:
+                                'Try switching back to All runs to see your full '
+                                'history.',
+                            actionLabel: 'Show all runs',
+                            onAction: () =>
+                                setState(() => _filter = _HistoryFilter.all),
+                          ),
+                        ),
+                      ViewLoadState.ready => SliverList.separated(
+                        itemCount: filteredRuns.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: NearPaceSpacing.sm),
+                        itemBuilder: (context, index) {
+                          final activity = filteredRuns[index];
+                          return ActivityCard(
+                            key: ValueKey(activity.id),
+                            activity: activity,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      RunResultScreen(activity: activity),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         );

@@ -5,6 +5,7 @@ import '../../config/firebase_bootstrap.dart';
 import '../../state/nearpace_controller.dart';
 import '../../theme/nearpace_colors.dart';
 import '../../theme/nearpace_spacing.dart';
+import '../widgets/city_picker_sheet.dart';
 import '../widgets/nearpace_card.dart';
 
 enum _AuthMode { signIn, signUp }
@@ -298,17 +299,64 @@ class _AuthScreenState extends State<AuthScreen> {
                                     },
                                   ),
                                   const SizedBox(height: NearPaceSpacing.sm),
-                                  TextFormField(
-                                    controller: _cityController,
-                                    textInputAction: TextInputAction.next,
-                                    maxLength: 60,
-                                    onFieldSubmitted: (_) =>
-                                        _submit(controller),
-                                    decoration: const InputDecoration(
-                                      labelText: 'City (optional)',
-                                      hintText:
-                                          'Used only for city leaderboard',
-                                      counterText: '',
+                                  InkWell(
+                                    onTap: () async {
+                                      final selected =
+                                          await CityPickerSheet.show(
+                                            context,
+                                            currentCity:
+                                                _cityController.text.isNotEmpty
+                                                ? _cityController.text
+                                                : null,
+                                            title: 'Select City in Indonesia',
+                                          );
+                                      if (selected != null) {
+                                        setState(() {
+                                          _cityController.text = selected;
+                                        });
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(
+                                      NearPaceSpacing.radiusSm,
+                                    ),
+                                    child: InputDecorator(
+                                      decoration: InputDecoration(
+                                        labelText: 'City (optional)',
+                                        hintText: 'Select Indonesian city...',
+                                        suffixIcon: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_cityController.text.isNotEmpty)
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.clear_rounded,
+                                                  size: 18,
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _cityController.clear();
+                                                  });
+                                                },
+                                              ),
+                                            const Icon(
+                                              Icons.location_city_rounded,
+                                            ),
+                                            const SizedBox(
+                                              width: NearPaceSpacing.xs,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _cityController.text.isNotEmpty
+                                            ? _cityController.text
+                                            : 'Select your city (GPS auto-detect)',
+                                        style: _cityController.text.isNotEmpty
+                                            ? textTheme.bodyLarge
+                                            : textTheme.bodyLarge?.copyWith(
+                                                color: colors.textMuted,
+                                              ),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: NearPaceSpacing.sm),
@@ -421,17 +469,6 @@ class _AuthScreenState extends State<AuthScreen> {
                               ],
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: NearPaceSpacing.md),
-
-                      // Direct preview entry without typing credentials.
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: controller.enterQuickPreview,
-                          icon: const Icon(Icons.play_circle_outline_rounded),
-                          label: const Text('Explore UI with sample runs'),
                         ),
                       ),
                     ],

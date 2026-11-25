@@ -6,6 +6,7 @@ import '../../theme/nearpace_spacing.dart';
 import '../../utils/formatters.dart';
 import 'nearpace_card.dart';
 import 'route_sketch.dart';
+import 'share_activity_sheet.dart';
 import 'weather_badge.dart';
 
 /// Reusable run summary row displayed on Home and History screens.
@@ -58,6 +59,44 @@ class ActivityCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: NearPaceSpacing.xs),
+                    if (activity.pendingSync) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.warningSurface,
+                          borderRadius: BorderRadius.circular(
+                            NearPaceSpacing.radiusPill,
+                          ),
+                          border: Border.all(
+                            color: colors.warning.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.cloud_upload_outlined,
+                              size: 11,
+                              color: colors.warning,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Pending sync',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: colors.warning,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: NearPaceSpacing.xs),
+                    ],
                     WeatherPill(weather: activity.weather),
                   ],
                 ),
@@ -80,6 +119,12 @@ class ActivityCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: NearPaceSpacing.xxs),
+          IconButton(
+            tooltip: 'Share run',
+            icon: Icon(Icons.share_outlined, color: colors.textMuted, size: 18),
+            onPressed: () =>
+                ShareActivitySheet.show(context, activity: activity),
+          ),
           ExcludeSemantics(
             child: Icon(
               Icons.chevron_right_rounded,

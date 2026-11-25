@@ -8,7 +8,9 @@ final class RunIdle extends RunState {
 }
 
 final class RunPreparing extends RunState {
-  const RunPreparing();
+  const RunPreparing({this.message = 'Acquiring GPS signal...'});
+
+  final String message;
 }
 
 final class RunActive extends RunState {
@@ -21,8 +23,16 @@ final class RunStopping extends RunState {
   const RunStopping();
 }
 
+enum RunFailureReason {
+  permissionDenied,
+  permissionDeniedForever,
+  serviceDisabled,
+  unknown,
+}
+
 final class RunFailed extends RunState {
-  const RunFailed(this.message);
+  const RunFailed(this.message, {this.reason = RunFailureReason.unknown});
 
   final String message;
+  final RunFailureReason reason;
 }

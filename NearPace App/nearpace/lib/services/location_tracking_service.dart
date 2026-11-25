@@ -12,6 +12,7 @@ abstract interface class LocationTrackingService {
   Future<bool> isLocationServiceEnabled();
   Future<bool> openAppSettings();
   Future<bool> openLocationSettings();
+  Future<GeoPointLite?> getLastKnownPosition();
   Stream<GeoPointLite> positionStream();
 }
 
@@ -44,6 +45,22 @@ class GeolocatorTrackingService implements LocationTrackingService {
   @override
   Future<bool> openLocationSettings() async {
     return Geolocator.openLocationSettings();
+  }
+
+  @override
+  Future<GeoPointLite?> getLastKnownPosition() async {
+    try {
+      final position = await Geolocator.getLastKnownPosition();
+      if (position == null) return null;
+      return GeoPointLite(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracyM: position.accuracy,
+        recordedAt: position.timestamp,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -84,7 +101,7 @@ class GeolocatorTrackingService implements LocationTrackingService {
 class SimulatedLocationService implements LocationTrackingService {
   SimulatedLocationService({
     LocationPermissionStatus initialPermission =
-        LocationPermissionStatus.granted,
+        LocationPermissionStatus.notRequested,
     this.serviceEnabled = true,
     List<GeoPointLite>? mockRoute,
   }) : _permission = initialPermission,
@@ -114,6 +131,10 @@ class SimulatedLocationService implements LocationTrackingService {
 
   @override
   Future<bool> openLocationSettings() async => true;
+
+  @override
+  Future<GeoPointLite?> getLastKnownPosition() async =>
+      _mockRoute.isNotEmpty ? _mockRoute.first : null;
 
   @override
   Stream<GeoPointLite> positionStream() {
